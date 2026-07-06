@@ -1,47 +1,154 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with SparkyFitness in Minutes"
+sidebarTitle: "Quickstart"
+description: "Deploy SparkyFitness using Docker Compose, configure your environment, and log your first meal in under 10 minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
+This guide walks you through the fastest path to a working SparkyFitness deployment. You will download the official Docker Compose file and environment template, set the required secrets, start the application, and create your first account — all in a single terminal session. No source code checkout is required.
 
 ## Prerequisites
 
-Before you begin, you must have:
+Before you begin, make sure the following tools are installed on your server or local machine:
 
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
+- **Docker** — [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose** — included with Docker Desktop; for Linux servers install the [Compose plugin](https://docs.docker.com/compose/install/)
 
-## Get started
+Verify both are available:
+
+```bash
+docker --version
+docker compose version
+```
+
+## Deployment Steps
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Download the Docker Compose file and environment template">
+    Create a dedicated directory for SparkyFitness, then download the pre-built production Compose file and the default environment variable template directly from the latest GitHub release:
 
     ```bash
-    npm install your-package
+    mkdir sparkyfitness && cd sparkyfitness
+
+    curl -L -o docker-compose.yml \
+      https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/docker-compose.prod.yml
+
+    curl -L -o .env \
+      https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/default.env.example
+    ```
+
+    The Compose file defines three services — `sparkyfitness-db` (PostgreSQL), `sparkyfitness-server` (Node.js API), and `sparkyfitness-frontend` (React app served by Nginx) — all on an isolated Docker network.
+  </Step>
+
+  <Step title="Generate and set the required secrets">
+    Open the `.env` file in your editor. Two secrets are **required** and must be set before the application will start:
+
+    **`SPARKY_FITNESS_API_ENCRYPTION_KEY`** — used to encrypt stored API keys at rest. Generate a secure value with:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+    **`BETTER_AUTH_SECRET`** — used by the authentication framework to sign and verify session tokens. Generate a separate value:
+
+    ```bash
+    openssl rand -hex 32
+    ```
+
+    Copy each output into your `.env` file:
+
+    ```bash
+    SPARKY_FITNESS_API_ENCRYPTION_KEY=<paste output here>
+    BETTER_AUTH_SECRET=<paste output here>
+    ```
+
+    You should also review and configure the database credentials in `.env`:
+
+    ```bash
+    SPARKY_FITNESS_DB_NAME=sparkyfitness
+    SPARKY_FITNESS_DB_USER=sparky
+    SPARKY_FITNESS_DB_PASSWORD=<a strong password>
+    SPARKY_FITNESS_APP_DB_PASSWORD=<a strong password>
+    ```
+
+    <Warning>
+      Never commit your `.env` file to version control. Both `SPARKY_FITNESS_API_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` are cryptographic secrets — losing them will break decryption of stored data and invalidate all active sessions.
+    </Warning>
+  </Step>
+
+  <Step title="Start the application">
+    Pull the latest images and start all services in detached mode:
+
+    ```bash
+    docker compose pull && docker compose up -d
+    ```
+
+    Docker Compose will start the services in dependency order: the database first, then the API server, then the frontend. The API server automatically runs database migrations on startup.
+
+    Check that all three containers are running:
+
+    ```bash
+    docker compose ps
+    ```
+
+    You should see `sparkyfitness-db`, `sparkyfitness-server`, and `sparkyfitness-frontend` all in a `running` state.
+
+    To follow the startup logs:
+
+    ```bash
+    docker compose logs -f
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
+  <Step title="Access the application">
+    Once all containers are healthy, open your browser and navigate to:
+
     ```
+    http://localhost:3004
+    ```
+
+    The frontend is served by Nginx inside the `sparkyfitness-frontend` container, which maps container port `80` to host port `3004`.
+
+    <Note>
+      If you are accessing SparkyFitness from a different machine on your network (not `localhost`), update `SPARKY_FITNESS_FRONTEND_URL` in your `.env` file to your server's IP address or hostname before starting the stack — for example `http://192.168.1.100:3004`. This value is used by the backend for CORS and redirect configuration. After changing it, run `docker compose up -d` again to apply.
+    </Note>
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
-    ```
+  <Step title="Create your account and complete onboarding">
+    On first visit you will be prompted to create an account. Fill in your name, email address, and a strong password, then follow the onboarding flow to:
+
+    - Set your fitness goals (weight, calorie targets, macros)
+    - Configure your measurement units (metric or imperial)
+    - Optionally connect device integrations (Garmin, Fitbit, Apple Health, etc.)
+
+    After onboarding you will land on the main dashboard, ready to log your first meal or workout.
+
+    <Tip>
+      The first account registered on a fresh instance is a standard user account. To designate an admin user who can access the admin panel, set `SPARKY_FITNESS_ADMIN_EMAIL` in your `.env` to that account's email address and restart the stack.
+    </Tip>
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## What's Next?
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
-</Tip>
+Now that SparkyFitness is running, explore the rest of the documentation to get the most out of your deployment:
+
+<CardGroup cols={2}>
+  <Card title="Environment Variables" icon="sliders" href="/installation/environment-variables">
+    Full reference for every `.env` option — database settings, email configuration, feature flags, and more.
+  </Card>
+  <Card title="Reverse Proxy Setup" icon="shield" href="/administration/reverse-proxy">
+    Put SparkyFitness behind Nginx or Caddy with HTTPS so it's safely accessible over the internet.
+  </Card>
+  <Card title="Authentication" icon="key" href="/administration/authentication">
+    Configure OIDC, TOTP two-factor authentication, Passkeys, and MFA for your users.
+  </Card>
+  <Card title="Device Integrations" icon="link" href="/features/device-integrations">
+    Connect Garmin, Fitbit, Apple Health, Google Health, Withings, Strava, and more to sync data automatically.
+  </Card>
+  <Card title="AI Assistant" icon="robot" href="/features/ai-assistant">
+    Set up SparkyAI with OpenAI, Anthropic, or Google Gemini to enable conversational food and activity logging.
+  </Card>
+  <Card title="Family Sharing" icon="users" href="/features/family-sharing">
+    Add family members to your instance and configure granular data-access permissions.
+  </Card>
+</CardGroup>

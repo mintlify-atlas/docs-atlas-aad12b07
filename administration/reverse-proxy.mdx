@@ -1,0 +1,172 @@
+---
+title: "Configure a Reverse Proxy for SparkyFitness"
+sidebarTitle: "Reverse Proxy"
+description: "Set up Nginx, Caddy, or Traefik as a reverse proxy in front of SparkyFitness to enable HTTPS, custom domains, and mobile app access."
+---
+
+A reverse proxy sits in front of the SparkyFitness frontend container and forwards requests to it while terminating TLS. This is required for production use because the SparkyFitness mobile app **only works over HTTPS** — it will refuse to connect to a plain `http://` origin. A reverse proxy also lets you serve SparkyFitness on a custom domain, handle SSL certificates automatically, and add optional security headers.
+
+<Warning>
+  The SparkyFitness mobile app requires HTTPS. If your instance is only reachable over plain HTTP, the mobile app will not be able to connect. Configure a reverse proxy with a valid TLS certificate before using the mobile app.
+</Warning>
+
+---
+
+## What to proxy
+
+The SparkyFitness frontend container runs Nginx internally on port `80` (or `8080` when running as a non-root user). Your external reverse proxy should forward all traffic for your domain to that port.
+
+In a standard Docker Compose deployment the service is named `sparkyfitness-frontend` and listens on port `80` inside the `sparkyfitness-network` bridge. The external port mapping defaults to `3004:80`.
+
+---
+
+## Nginx Proxy Manager
+
+If you use [Nginx Proxy Manager](https://nginxproxymanager.com/), add the following to the **Advanced** tab of your proxy host under **Custom Nginx Configuration**:
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-Ssl on;
+add_header X-Content-Type-Options "nosniff";
+```
+
+### Using Docker networking with Nginx Proxy Manager
+
+Instead of forwarding to a host IP and port you can route directly through Docker networking:
+
+1. Set the **Scheme** to `http`.
+2. Set the **Forward Hostname / IP** to `sparkyfitness-frontend` (the Docker container name).
+3. Set the **Forward Port** to `80`.
+4. Connect the two containers to a shared network:
+
+```bash
+# Find the Nginx Proxy Manager network name
+docker network ls
+
+# Find the SparkyFitness frontend container name
+docker container ls
+
+# Connect them
+docker network connect <npm-network-name> sparkyfitness-frontend
+```
+
+---
+
+## Standalone Nginx
+
+If you manage your own Nginx installation, create a server block similar to the following. Replace `fitness.example.com` with your domain and adjust the certificate paths for your certificate authority (e.g. Let's Encrypt / Certbot).
+
+```nginx
+server {
+    listen 80;
+    server_name fitness.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name fitness.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/fitness.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/fitness.example.com/privkey.pem;
+
+    # Forward all traffic to the SparkyFitness frontend container
+    location / {
+        proxy_pass         http://127.0.0.1:3004;  # host port mapped in docker-compose
+        proxy_set_header   Host               $host;
+        proxy_set_header   X-Real-IP          $remote_addr;
+        proxy_set_header   X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto  $scheme;
+        proxy_set_header   X-Forwarded-Ssl    on;
+        add_header         X-Content-Type-Options "nosniff";
+
+        # Increase timeouts for long-running operations (e.g. backups)
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    300s;
+        proxy_read_timeout    300s;
+
+        # Increase buffer sizes for API responses
+        proxy_buffer_size       16k;
+        proxy_buffers           16 64k;
+        proxy_busy_buffers_size 128k;
+    }
+}
+```
+
+<Tip>
+  The internal Nginx bundled inside the `sparkyfitness-frontend` container already adds security headers (`X-Frame-Options`, `Content-Security-Policy`, `Strict-Transport-Security`, etc.) to every response. You do not need to duplicate them in your external proxy unless you want to override them.
+</Tip>
+
+---
+
+## Caddy
+
+[Caddy](https://caddyserver.com/) automatically provisions and renews TLS certificates via Let's Encrypt. Add the following to your `Caddyfile`:
+
+```caddy
+fitness.example.com {
+    reverse_proxy 127.0.0.1:3004
+}
+```
+
+That single block is sufficient for most deployments — Caddy handles HTTPS, header forwarding, and certificate renewal automatically.
+
+If you need to override headers explicitly:
+
+```caddy
+fitness.example.com {
+    reverse_proxy 127.0.0.1:3004 {
+        header_up Host              {host}
+        header_up X-Real-IP         {remote_host}
+        header_up X-Forwarded-For   {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+```
+
+---
+
+## Traefik
+
+If you use Traefik as your ingress controller, you can configure automatic routing via Docker labels in your `docker-compose.yml`. Add the following labels to the `sparkyfitness-frontend` service:
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.sparkyfitness.rule=Host(`fitness.example.com`)"
+  - "traefik.http.routers.sparkyfitness.entrypoints=websecure"
+  - "traefik.http.routers.sparkyfitness.tls.certresolver=myresolver"
+  - "traefik.http.services.sparkyfitness.loadbalancer.server.port=80"
+```
+
+Ensure the `sparkyfitness-frontend` container is connected to the same Docker network as your Traefik instance, and that Traefik is configured with a certificate resolver (e.g. Let's Encrypt).
+
+---
+
+## CORS Configuration
+
+SparkyFitness enforces CORS on the backend server. Two environment variables control which origins the server accepts requests from, in addition to the primary `SPARKY_FITNESS_FRONTEND_URL`.
+
+| Variable | Default | Description |
+|---|---|---|
+| `SPARKY_FITNESS_FRONTEND_URL` | `http://localhost:3004` | **Primary** trusted origin. Set this to your public `https://` domain in production. |
+| `ALLOW_PRIVATE_NETWORK_CORS` | `false` | When `true`, accepts requests from any private-range address (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `localhost`). Useful for self-hosted LAN setups. |
+| `SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS` | _(empty)_ | Comma-separated list of additional origins to trust (e.g. `http://192.168.1.175:8080,http://10.0.0.5:8080`). |
+
+```bash
+# .env — production example with a custom LAN IP also allowed
+SPARKY_FITNESS_FRONTEND_URL=https://fitness.example.com
+ALLOW_PRIVATE_NETWORK_CORS=false
+SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS=http://192.168.1.100:3004
+```
+
+<Warning>
+  Only enable `ALLOW_PRIVATE_NETWORK_CORS=true` on private, self-hosted networks. Do **not** enable it on shared hosting or any environment where untrusted users might have access to your network range.
+</Warning>
+
+<Note>
+  `SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS` is most useful when you access the app from a static LAN IP (e.g. a TV, tablet, or home-automation integration on a fixed address) and `ALLOW_PRIVATE_NETWORK_CORS` is not broad enough or you prefer to allow only specific addresses.
+</Note>

@@ -1,72 +1,110 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "SparkyFitness",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
-  },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "primary": "#22c55e",
+    "light": "#bbf7d0",
+    "dark": "#15803d"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/CodeWithCJ/SparkyFitness"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/CodeWithCJ/SparkyFitness"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Getting Started",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/docker-compose",
+              "installation/portainer",
+              "installation/kubernetes",
+              "installation/build-from-source",
+              "installation/environment-variables"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "administration/authentication",
+              "administration/reverse-proxy",
+              "administration/backup-restore",
+              "administration/external-database"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Features",
+        "groups": [
+          {
+            "group": "Core Tracking",
+            "pages": [
+              "features/nutrition-diary",
+              "features/exercise-logging",
+              "features/check-in",
+              "features/water-tracking",
+              "features/goals-reports"
+            ]
+          },
+          {
+            "group": "Health & Integrations",
+            "pages": [
+              "features/device-integrations",
+              "features/food-databases",
+              "features/ai-assistant",
+              "features/mcp-server"
+            ]
+          },
+          {
+            "group": "Account & Sharing",
+            "pages": [
+              "features/family-sharing",
+              "features/user-settings",
+              "features/mobile-app"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer Guide",
+        "groups": [
+          {
+            "group": "Contributing",
+            "pages": [
+              "developer/architecture",
+              "developer/getting-started",
+              "developer/database",
+              "developer/contributing"
+            ]
+          },
+          {
+            "group": "API & Integrations",
+            "pages": [
+              "developer/api-reference",
+              "developer/mcp-integration",
+              "developer/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

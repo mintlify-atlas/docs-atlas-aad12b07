@@ -1,0 +1,133 @@
+{
+  "projectType": "saas",
+  "projectName": "SparkyFitness",
+  "projectDescription": "A self-hosted, privacy-first fitness tracking platform for families that covers nutrition, exercise, hydration, sleep, body metrics, and AI-powered coaching.",
+  "theme": "almond",
+  "primaryColor": "#22c55e",
+  "lightColor": "#bbf7d0",
+  "darkColor": "#15803d",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Getting Started",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/docker-compose",
+              "installation/portainer",
+              "installation/kubernetes",
+              "installation/build-from-source",
+              "installation/environment-variables"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "administration/authentication",
+              "administration/reverse-proxy",
+              "administration/backup-restore",
+              "administration/external-database"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Features",
+        "groups": [
+          {
+            "group": "Core Tracking",
+            "pages": [
+              "features/nutrition-diary",
+              "features/exercise-logging",
+              "features/check-in",
+              "features/water-tracking",
+              "features/goals-reports"
+            ]
+          },
+          {
+            "group": "Health & Integrations",
+            "pages": [
+              "features/device-integrations",
+              "features/food-databases",
+              "features/ai-assistant",
+              "features/mcp-server"
+            ]
+          },
+          {
+            "group": "Account & Sharing",
+            "pages": [
+              "features/family-sharing",
+              "features/user-settings",
+              "features/mobile-app"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Developer Guide",
+        "groups": [
+          {
+            "group": "Contributing",
+            "pages": [
+              "developer/architecture",
+              "developer/getting-started",
+              "developer/database",
+              "developer/contributing"
+            ]
+          },
+          {
+            "group": "API & Integrations",
+            "pages": [
+              "developer/api-reference",
+              "developer/mcp-integration",
+              "developer/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Nutrition, exercise, hydration, sleep, fasting, mood, and body measurement tracking",
+    "AI-powered chat assistant (SparkyAI) with food photo recognition",
+    "Model Context Protocol (MCP) server for AI client integration",
+    "Family & friends sharing with granular per-permission access control",
+    "20+ health and fitness device integrations (Garmin, Fitbit, Apple Health, Google Health, Withings, Polar, Strava, etc.)",
+    "Multiple food databases (USDA, OpenFoodFacts, FatSecret, Nutritionix, Mealie, Tandoor, etc.)",
+    "Interactive charts, long-term reports, and adaptive TDEE calculation",
+    "OIDC, TOTP, Passkey, and MFA authentication support",
+    "Self-hosted via Docker Compose or Kubernetes Helm chart",
+    "Row-level security in PostgreSQL for multi-user data isolation",
+    "Cycle Hub and pregnancy tracking",
+    "Medication tracking and management"
+  ],
+  "publicApiSurface": [
+    "POST /api/health-data — ingest health data points (weight, steps, water, custom measurements) via API key",
+    "GET/POST /api/food — food database CRUD",
+    "GET/POST /api/food-entries — diary food entry logging",
+    "GET/POST /api/exercise-entries — exercise logging",
+    "GET/POST /api/measurements — body measurement tracking",
+    "GET/POST /api/goals — goal management",
+    "GET /api/reports — aggregated health reports",
+    "GET/POST /api/water-intake — water intake logging",
+    "GET/POST /api/sleep — sleep tracking",
+    "GET/POST /api/mood — mood logging",
+    "GET/POST /api/fasting — fasting window tracking",
+    "POST /api/chat — AI assistant (SparkyAI) chat interface",
+    "GET/POST /api/check-in — daily check-in wizard",
+    "GET/POST /api/meal-plan-templates — meal plan templates",
+    "GET/POST /api/workout-plan-templates — workout plan templates",
+    "GET /api/mcp — Model Context Protocol server endpoint",
+    "GET/POST /api/fitbit, /api/garmin, /api/withings, /api/polar, /api/strava, /api/google-health — OAuth integration callbacks",
+    "GET /api/daily-summary — daily nutritional summary",
+    "GET /api/dashboard — dashboard data aggregation"
+  ]
+}

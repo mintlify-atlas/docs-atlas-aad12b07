@@ -1,0 +1,142 @@
+---
+title: "SparkyFitness: Open-Source Self-Hosted Fitness Platform"
+sidebarTitle: "Introduction"
+description: "SparkyFitness is a self-hosted alternative to MyFitnessPal for families. Track nutrition, exercise, body metrics, and health data with full privacy."
+---
+
+SparkyFitness is a self-hosted, privacy-first fitness tracking platform built for individuals and families who want complete control over their health data. Rather than trusting a third-party SaaS product with sensitive personal information, SparkyFitness runs entirely on your own infrastructure — a Docker-capable server is all you need. It covers the full spectrum of health tracking: food and hydration, exercise, body measurements, sleep, mood, fasting, and goal management, all accessible through a modern web interface and native iOS/Android apps.
+
+## Core Features
+
+<CardGroup cols={2}>
+  <Card title="Nutrition Tracking" icon="apple-whole">
+    Log meals and individual foods, create custom food entries, track macros and micronutrients, and analyze trends over time. Pull data from multiple food databases including OpenFoodFacts, USDA, FatSecret, and Nutritionix.
+  </Card>
+  <Card title="Exercise Logging" icon="dumbbell">
+    Record workouts manually or sync activity data automatically from connected fitness platforms. Browse a built-in exercise library powered by Wger and Free Exercise DB, and create your own custom exercises.
+  </Card>
+  <Card title="Body Metrics" icon="ruler">
+    Track weight, body measurements, and any custom health categories you define. Visualize progress with interactive charts and long-term trend reports.
+  </Card>
+  <Card title="Sleep & Wellness" icon="moon">
+    Log sleep sessions, mood check-ins, hydration, and fasting windows. Pull sleep data automatically from wearables and health platforms via device integrations.
+  </Card>
+  <Card title="AI Assistant (Beta)" icon="robot">
+    SparkyAI provides a conversational interface for logging food, exercise, body stats, and steps via chat. Supports photo-based meal logging with image recognition and retains conversation history for follow-up queries.
+  </Card>
+  <Card title="Device Integrations" icon="link">
+    Sync data from Garmin, Fitbit, Apple Health, Google Health Connect, Withings, Polar, Strava, and Hevy. Food data integrates with OpenFoodFacts, USDA, FatSecret, Nutritionix, Mealie, Tandoor, and more.
+  </Card>
+  <Card title="Family Sharing" icon="users">
+    Support multiple user profiles on a single instance with a granular permission system. Family members can share access to specific data views such as diary, reports, and measurements.
+  </Card>
+  <Card title="Reports & Analytics" icon="chart-line">
+    Generate comprehensive reports across date ranges for nutrition, exercise, measurements, and sleep. Interactive charts make long-term progress visible at a glance.
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+SparkyFitness is built on a modern, full-stack architecture designed to be self-hostable without specialized infrastructure knowledge.
+
+### Frontend
+
+| Technology | Role |
+|---|---|
+| React 18 + TypeScript | Component-based UI with full type safety |
+| Vite | Fast development server and optimized production builds |
+| Tailwind CSS + shadcn/ui | Utility-first styling with accessible UI components |
+| React Router v6 | Client-side routing |
+| TanStack Query | Server state management, caching, and background refetching |
+
+### Backend
+
+| Technology | Role |
+|---|---|
+| Node.js + Express | REST API server handling all application logic |
+| PostgreSQL 15+ | Primary data store |
+| Row-Level Security (RLS) | Database-enforced data isolation per user |
+| JWT Authentication | Secure, token-based session management |
+| Better Auth | Authentication framework supporting OIDC, TOTP, Passkeys, and MFA |
+
+### Deployment
+
+SparkyFitness ships as a set of Docker images orchestrated with Docker Compose. The production stack includes three services: a PostgreSQL database, the Node.js API server, and an Nginx-fronted React frontend. All services communicate over an isolated Docker network; only the frontend port is exposed to the host by default.
+
+## Why Self-Host?
+
+<CardGroup cols={2}>
+  <Card title="Your Data Stays Yours" icon="lock">
+    All health data is stored exclusively on infrastructure you control. No third party has access to your nutrition logs, body metrics, or exercise history.
+  </Card>
+  <Card title="No Subscription Fees" icon="circle-dollar-to-slot">
+    SparkyFitness is open-source software. There are no monthly plans, premium tiers, or paywalled features — deploy it once and use it indefinitely.
+  </Card>
+  <Card title="Family Use on One Instance" icon="house">
+    A single self-hosted instance supports multiple user profiles with configurable access levels, making it practical for households and small groups.
+  </Card>
+  <Card title="Fully Customizable" icon="screwdriver-wrench">
+    Because you run the stack, you can configure integrations, adjust database settings, customize authentication providers, and extend the platform to fit your workflow.
+  </Card>
+</CardGroup>
+
+## Device & Service Integrations
+
+SparkyFitness connects to a wide range of health platforms and food databases. Integrations automatically sync activity data such as steps, workouts, and sleep, along with health metrics like weight and body measurements.
+
+### Health & Fitness Platforms
+
+- **Garmin Connect** — Sync activities, sleep, and health metrics from Garmin wearables
+- **Fitbit** — Import workouts, sleep, and body metrics
+- **Apple Health** (iOS) — Bidirectional sync via the native iOS app
+- **Google Health Connect** (Android) — Sync health data on Android devices
+- **Google Health API** — Cloud-based Google health data access
+- **Withings** — Import body composition data from Withings scales and devices
+- **Polar Flow** — Sync training data from Polar devices
+- **Strava** — Import running and cycling activities *(partially tested)*
+- **Hevy** — Import strength training workouts *(not tested)*
+
+### Food & Nutrition Databases
+
+- **OpenFoodFacts** — Open community food database with extensive product information
+- **USDA FoodData Central** — Official US government nutrition database
+- **FatSecret** — Food database with recipes and meal planning data
+- **Nutritionix** — Commercial database including restaurant chain nutrition data
+- **Swiss Food Database** — Swiss national food composition database
+
+### Recipe & Meal Planning
+
+- **Mealie** — Self-hosted recipe manager integration
+- **Tandoor** — Self-hosted recipe management with nutrition data
+- **Wger** — Open exercise database and workout planning
+
+<Note>
+  AI features (SparkyAI) and Family & Friends access are currently in **beta**. They may have incomplete functionality or known bugs. Always review release notes before upgrading, and avoid auto-updating containers.
+</Note>
+
+## Authentication Options
+
+SparkyFitness uses [Better Auth](https://www.better-auth.com/) and supports a range of authentication methods out of the box:
+
+- Username and password
+- OIDC (OpenID Connect) — integrate with your existing identity provider
+- TOTP (Time-based One-Time Password) — standard authenticator app support
+- Passkeys — hardware and platform authenticator support
+- Multi-Factor Authentication (MFA)
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Deploy SparkyFitness with Docker Compose and log your first meal in under 10 minutes.
+  </Card>
+  <Card title="Installation" icon="server" href="/installation/docker-compose">
+    Full installation guide covering Docker Compose, environment variables, and reverse proxy setup.
+  </Card>
+  <Card title="Features" icon="star" href="/features">
+    Detailed documentation for every SparkyFitness feature, from nutrition tracking to AI logging.
+  </Card>
+  <Card title="Developer Guide" icon="code" href="/developer/getting-started">
+    Architecture overview, local development setup, and contribution guidelines.
+  </Card>
+</CardGroup>

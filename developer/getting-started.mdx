@@ -1,0 +1,304 @@
+---
+title: "Set Up a SparkyFitness Development Environment"
+sidebarTitle: "Dev Environment"
+description: "Clone SparkyFitness, configure environment variables, start the development stack with Docker or pnpm, and run the test suite."
+---
+
+SparkyFitness ships a Docker-based development environment that brings up the frontend, backend, and PostgreSQL database with a single command and live-reloading on every file change. If you prefer to run services directly on your machine, a local pnpm workflow is also supported. Either way, the steps below get you from a fresh clone to a running application in minutes.
+
+## Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Docker (recommended)" icon="docker">
+    - **Docker & Docker Compose** — required to run the containerised stack
+    - **Git** — for cloning the repository
+
+    No Node.js, pnpm, or PostgreSQL installation needed when using Docker.
+  </Card>
+  <Card title="Local dev (without Docker)" icon="terminal">
+    - **Node.js 18+** and **pnpm**
+    - **PostgreSQL 15+**
+    - **Git**
+
+    Required when you want to run services directly on your machine.
+  </Card>
+</CardGroup>
+
+## Quick Start with Docker (Recommended)
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/CodeWithCJ/SparkyFitness.git
+    cd SparkyFitness
+    ```
+  </Step>
+
+  <Step title="Copy the environment template">
+    ```bash
+    cp docker/.env.example .env
+    ```
+  </Step>
+
+  <Step title="Generate an encryption key">
+    The `SPARKY_FITNESS_API_ENCRYPTION_KEY` variable must be a 64-character hex string. Generate and inject one automatically:
+
+    ```bash
+    sed "s/SPARKY_FITNESS_API_ENCRYPTION_KEY=changeme_replace_with_a_64_character_hex_string/SPARKY_FITNESS_API_ENCRYPTION_KEY=$(openssl rand -hex 32)/" \
+      .env > .env.tmp && mv .env.tmp .env
+    ```
+
+    Alternatively, generate the key manually and paste it into `.env`:
+
+    ```bash
+    openssl rand -hex 32
+    # or
+    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+    ```
+  </Step>
+
+  <Step title="(Optional) Update the frontend URL">
+    If Docker is running on a remote machine, update `SPARKY_FITNESS_FRONTEND_URL` in `.env` to match that machine's IP or hostname.
+  </Step>
+
+  <Step title="Start the development stack">
+    ```bash
+    ./docker/docker-helper.sh dev up
+    ```
+
+    The first run pulls or builds images; subsequent starts are much faster.
+  </Step>
+</Steps>
+
+<Tip>
+  The `docker-helper.sh` script is the recommended way to manage every lifecycle operation — starting, stopping, viewing logs, rebuilding, and cleaning. Run `./docker/docker-helper.sh help` at any time to see all available commands.
+</Tip>
+
+## Service URLs
+
+| Service | URL | Notes |
+|---|---|---|
+| Frontend | `http://localhost:8080` | Live-reload enabled in dev mode |
+| Backend API | `http://localhost:3010` | Direct access; dev mode only |
+| PostgreSQL | `localhost:5432` | Direct access for debugging |
+| Production (nginx) | `http://localhost:3004` | Single entry point in prod mode |
+
+## Docker Helper Script
+
+The `./docker/docker-helper.sh` script wraps Docker Compose with validation and convenience commands:
+
+```bash
+# Start development environment (live reloading)
+./docker/docker-helper.sh dev up
+
+# Start production environment (optimised builds)
+./docker/docker-helper.sh prod up
+
+# Stop all services
+./docker/docker-helper.sh down
+
+# View logs for all services
+./docker/docker-helper.sh logs
+
+# View logs for a specific service
+./docker/docker-helper.sh logs backend
+
+# Rebuild all images
+./docker/docker-helper.sh build
+
+# Restart all services (or a specific one)
+./docker/docker-helper.sh restart
+./docker/docker-helper.sh restart frontend
+
+# Remove all containers, networks, and volumes
+./docker/docker-helper.sh clean
+
+# Show all available commands
+./docker/docker-helper.sh help
+```
+
+### Development vs production environments
+
+| Feature | `dev up` | `prod up` |
+|---|---|---|
+| Live reloading | ✅ Frontend + backend | ❌ |
+| Local code volumes | ✅ Mounted | ❌ Uses built images |
+| Direct DB access | ✅ Port 5432 exposed | ❌ Internal only |
+| Backend API exposed | ✅ Port 3010 | ❌ Proxied via nginx |
+| Image source | Built locally | Pulled from DockerHub |
+
+## Local Development (Without Docker)
+
+If you prefer to run services directly on your machine, follow these steps:
+
+<Steps>
+  <Step title="Install pnpm and clone the repo">
+    ```bash
+    npm install -g pnpm
+    git clone https://github.com/CodeWithCJ/SparkyFitness.git
+    cd SparkyFitness
+    ```
+  </Step>
+
+  <Step title="Install all workspace dependencies">
+    ```bash
+    pnpm install
+    ```
+
+    This installs dependencies for all packages defined in `pnpm-workspace.yaml` (frontend, backend, mobile, shared, docs).
+  </Step>
+
+  <Step title="Create and configure the database">
+    ```sql
+    CREATE DATABASE sparkyfitness;
+    CREATE USER sparky WITH PASSWORD 'your_password';
+    GRANT ALL PRIVILEGES ON DATABASE sparkyfitness TO sparky;
+    ```
+  </Step>
+
+  <Step title="Configure environment variables for the backend">
+    ```bash
+    cd SparkyFitnessServer
+    cp .env.example .env
+    # Edit .env with your database credentials and secrets
+    ```
+
+    Key variables:
+
+    ```bash
+    DATABASE_URL=postgresql://sparky:your_password@localhost:5432/sparkyfitness
+    PORT=3010
+    NODE_ENV=development
+    JWT_SECRET=your_jwt_secret
+    SPARKY_FITNESS_API_ENCRYPTION_KEY=<64-char hex string>
+    ```
+  </Step>
+
+  <Step title="Run database migrations and start the backend">
+    ```bash
+    # From SparkyFitnessServer/
+    pnpm run migrate
+    pnpm run dev
+    ```
+  </Step>
+
+  <Step title="Start the frontend">
+    ```bash
+    # From SparkyFitnessFrontend/
+    pnpm dev
+    ```
+
+    The frontend dev server proxies `/api`, `/health-data`, and `/uploads` to the backend on port `3010`.
+  </Step>
+</Steps>
+
+## Environment Variables Reference
+
+Copy the template and edit as needed:
+
+```bash
+cp docker/.env.example .env
+```
+
+<Accordion title="Database configuration">
+  ```bash
+  DATABASE_URL=postgresql://user:password@host:5432/dbname
+  DB_HOST=localhost
+  DB_PORT=5432
+  DB_NAME=sparkyfitness
+  DB_USER=sparky
+  DB_PASSWORD=your_password
+
+  # App DB user (limited privileges, used at runtime)
+  SPARKY_FITNESS_APP_DB_USER=sparky_app
+  ```
+</Accordion>
+
+<Accordion title="Application settings">
+  ```bash
+  PORT=3010
+  NODE_ENV=development
+  JWT_SECRET=your_jwt_secret_here
+  SPARKY_FITNESS_API_ENCRYPTION_KEY=<64-char hex string>
+
+  # Set this to your machine's address when running Docker remotely
+  SPARKY_FITNESS_FRONTEND_URL=http://localhost:8080
+  ```
+</Accordion>
+
+<Accordion title="AI provider keys (optional)">
+  ```bash
+  OPENAI_API_KEY=sk-...
+  GOOGLE_AI_API_KEY=...
+  ANTHROPIC_API_KEY=sk-ant-...
+  ```
+
+  AI features are optional — the app runs fully without them.
+</Accordion>
+
+## Running Tests
+
+SparkyFitness uses **Jest / Vitest** for JavaScript and TypeScript testing across the frontend, backend, and mobile packages, and **pytest** for the Garmin microservice.
+
+```bash
+# Frontend (Vite + React) — from SparkyFitnessFrontend/
+pnpm test          # Watch mode
+pnpm test:ci       # Single run with coverage
+
+# Backend (Node.js + Express) — from SparkyFitnessServer/
+pnpm test          # Watch mode
+pnpm test:ci       # Single run with coverage
+
+# Mobile (React Native + Expo) — from SparkyFitnessMobile/
+npm run test:run   # Single run
+npm run test:ci    # Single run with coverage
+
+# Garmin microservice (Python) — from SparkyFitnessGarmin/
+pytest --cov=. --cov-report=html
+```
+
+CI runs on pull requests and pushes to `main` using path-based change detection — only the affected component's tests execute. Coverage reports are uploaded as build artifacts and retained for seven days.
+
+### Full validation before submitting a PR
+
+```bash
+# Frontend
+cd SparkyFitnessFrontend && pnpm run validate
+
+# Backend
+cd SparkyFitnessServer && pnpm run typecheck && pnpm run lint && pnpm run test
+
+# Mobile
+cd SparkyFitnessMobile && pnpm run lint && pnpm run test:run -- --watchman=false --runInBand
+```
+
+## Common Issues
+
+<Accordion title="Port conflicts">
+  Check which process is using a required port:
+
+  ```bash
+  lsof -i :8080   # Frontend
+  lsof -i :3010   # Backend
+  lsof -i :5432   # Database
+  ```
+
+  Stop the conflicting process or adjust the port in `.env`.
+</Accordion>
+
+<Accordion title="Docker permission errors">
+  Ensure your user is in the `docker` group:
+
+  ```bash
+  sudo usermod -aG docker $USER
+  # Log out and back in for the change to take effect
+  ```
+</Accordion>
+
+<Accordion title="Database connection failures">
+  Verify that PostgreSQL is running and that the credentials in `.env` exactly match what was used when creating the database user. For the Docker stack, ensure the `db` service started successfully:
+
+  ```bash
+  ./docker/docker-helper.sh logs db
+  ```
+</Accordion>

@@ -1,0 +1,212 @@
+---
+title: "Backup and Restore SparkyFitness Data"
+sidebarTitle: "Backup & Restore"
+description: "Back up and restore the SparkyFitness PostgreSQL database using the built-in backup script, manual pg_dump, or Docker volume snapshots."
+---
+
+Protecting your fitness data is critical. SparkyFitness stores all of its data in a PostgreSQL database and optionally in an `uploads` directory (for profile pictures and exercise images). This guide covers three complementary backup approaches: the included `db_backup.sh` schema-backup script, full `pg_dump` data backups, and Docker volume snapshots. Use all of them together for a robust 3-2-1 backup strategy — three copies of your data, on two different media, with one copy off-site.
+
+<Note>
+  SparkyFitness also includes an in-app backup mechanism under **Admin → Backup & Restore**. This guide focuses on manual and scripted methods that work independently of the running application, which is essential for disaster recovery when the containers are not functioning.
+</Note>
+
+---
+
+## Automated Backup Script (`db_backup.sh`)
+
+The repository ships a shell script (`db_backup.sh`) that reads your `.env` file, locates a compatible `pg_dump` binary, and exports the **schema only** to `db_schema_backup.sql`. This is intended for schema versioning and development snapshots rather than full data recovery.
+
+### Prerequisites
+
+- `pg_dump` must be installed and version-compatible with your PostgreSQL server.
+- Your `.env` file must be present in the same directory from which you run the script.
+
+### Usage
+
+```bash
+# From the directory containing your .env file
+bash db_backup.sh
+```
+
+The script will:
+1. Load all variables from `.env`.
+2. Locate `pg_dump` (checks Homebrew paths for PostgreSQL 18 first, then falls back to `$PATH`).
+3. Run `pg_dump --schema-only --no-owner` and write the output to `db_schema_backup.sql`.
+
+```bash
+# Example output
+Loading environment variables from .env...
+Backing up schema for database: sparkyfitness_db on sparkyfitness-db:5432
+Using pg_dump binary at: pg_dump
+Backup completed: db_schema_backup.sql
+```
+
+<Warning>
+  `db_backup.sh` exports the schema **only** — it does not include your data rows. Use `pg_dump` without `--schema-only` for full data backups (see below).
+</Warning>
+
+---
+
+## Manual Full Backup with `pg_dump`
+
+For a complete backup that includes both the schema and all data, use `pg_dump` directly. If your database runs in Docker you can invoke `pg_dump` through a temporary PostgreSQL container so that no local PostgreSQL installation is required on the host.
+
+```bash
+# Replace these values with your actual credentials from .env
+DB_HOST="sparkyfitness-db"
+DB_PORT="5432"
+DB_USER="sparky"
+DB_NAME="sparkyfitness_db"
+BACKUP_FILE="sparkyfitness_$(date +%Y%m%d_%H%M%S).sql.gz"
+
+# Run pg_dump inside a temporary container and compress the output
+docker run --rm \
+  --network sparkyfitness-network \
+  -e PGPASSWORD="${SPARKY_FITNESS_DB_PASSWORD}" \
+  postgres:18-alpine \
+  pg_dump -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" \
+  | gzip > "${BACKUP_FILE}"
+
+echo "Backup written to ${BACKUP_FILE}"
+```
+
+<Tip>
+  Add this command to a cron job or a systemd timer on your Docker host to create automated nightly backups. Rotate old backups with `find . -name "sparkyfitness_*.sql.gz" -mtime +30 -delete`.
+</Tip>
+
+### Backup the uploads directory
+
+Profile pictures and exercise images are stored in the `uploads` volume. Back it up alongside the database dump:
+
+```bash
+UPLOADS_BACKUP="sparkyfitness_uploads_$(date +%Y%m%d_%H%M%S).tar.gz"
+
+docker run --rm \
+  -v sparkyfitness_server_uploads_data:/uploads_volume:ro \
+  ubuntu:latest \
+  tar -czf - -C /uploads_volume . > "${UPLOADS_BACKUP}"
+
+echo "Uploads backup written to ${UPLOADS_BACKUP}"
+```
+
+---
+
+## Restore Procedure
+
+<Warning>
+  **Restore is a destructive operation.** The procedure below drops and recreates the database, permanently deleting all existing data. Stop the SparkyFitness services before proceeding and confirm you have the correct backup file.
+</Warning>
+
+### Step 1 — Stop all services
+
+```bash
+docker compose down
+```
+
+### Step 2 — Drop and recreate the database
+
+Start only the database container so you can interact with it:
+
+```bash
+docker compose up -d sparkyfitness-db
+```
+
+Drop the existing database and recreate it:
+
+```bash
+DB_HOST="sparkyfitness-db"
+DB_PORT="5432"
+DB_USER="sparky"
+DB_PASSWORD="your_db_password"
+DB_NAME="sparkyfitness_db"
+
+# Drop
+docker run --rm \
+  --network sparkyfitness-network \
+  -e PGPASSWORD="${DB_PASSWORD}" \
+  postgres:18-alpine \
+  dropdb -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" "${DB_NAME}"
+
+# Recreate
+docker run --rm \
+  --network sparkyfitness-network \
+  -e PGPASSWORD="${DB_PASSWORD}" \
+  postgres:18-alpine \
+  createdb -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" "${DB_NAME}"
+```
+
+### Step 3 — Restore the database dump
+
+```bash
+BACKUP_FILE="sparkyfitness_20240101_120000.sql.gz"
+
+gunzip -c "${BACKUP_FILE}" | docker run --rm -i \
+  --network sparkyfitness-network \
+  -e PGPASSWORD="${DB_PASSWORD}" \
+  postgres:18-alpine \
+  psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}"
+```
+
+### Step 4 — Restore the uploads directory
+
+```bash
+UPLOADS_BACKUP="sparkyfitness_uploads_20240101_120000.tar.gz"
+
+# Clear the existing uploads volume first
+docker run --rm \
+  -v sparkyfitness_server_uploads_data:/uploads_volume \
+  ubuntu:latest \
+  rm -rf /uploads_volume/*
+
+# Restore
+docker run --rm -i \
+  -v sparkyfitness_server_uploads_data:/uploads_volume \
+  ubuntu:latest \
+  tar -xzf - -C /uploads_volume < "${UPLOADS_BACKUP}"
+```
+
+### Step 5 — Restart all services
+
+```bash
+docker compose up -d
+```
+
+Your SparkyFitness instance will apply any pending migrations on startup and should be fully restored.
+
+---
+
+## In-App Full Backup Archive
+
+The in-app backup (under **Admin → Backup & Restore**) creates a combined `.tar.gz` archive containing both a compressed SQL dump and an uploads archive. These archives are stored in the `SparkyFitnessServer` backup volume, which defaults to `./backup` on the host (configurable via `SERVER_BACKUP_PATH` in `.env`).
+
+To restore from an in-app archive manually, extract it and then follow steps 2–5 above using the extracted `.sql.gz` and uploads `.tar.gz` files.
+
+```bash
+# Extract the combined archive
+cd /var/lib/docker/volumes/sparkyfitness_server_backup_data/_data/
+tar -xzf sparkyfitness_full_backup_YYYYMMDD_HHMMSS.tar.gz
+# Produces: sparkyfitness_db_backup_YYYYMMDD_HHMMSS.sql.gz
+#           sparkyfitness_uploads_backup_YYYYMMDD_HHMMSS.tar.gz
+```
+
+<Warning>
+  The in-app backup and restore feature is relatively new. Always maintain independent backups using `pg_dump` or Docker volume snapshots as described above. Do not rely solely on the in-app mechanism for critical data.
+</Warning>
+
+---
+
+## Docker Volume Snapshot
+
+For a filesystem-level backup you can snapshot the Docker volumes directly. This approach captures both the PostgreSQL data directory and the uploads directory at the block level.
+
+```bash
+# Backup the PostgreSQL data volume (DB_PATH in .env, e.g. ../postgresql)
+tar -czf sparkyfitness_pgdata_$(date +%Y%m%d).tar.gz -C /path/to/postgresql .
+
+# Backup the uploads volume (SERVER_UPLOADS_PATH in .env, e.g. ./uploads)
+tar -czf sparkyfitness_uploads_$(date +%Y%m%d).tar.gz -C /path/to/uploads .
+```
+
+<Warning>
+  Volume snapshots taken while PostgreSQL is running may capture an inconsistent state. For reliable filesystem-level backups, stop the database container first with `docker compose stop sparkyfitness-db`, take the snapshot, then restart with `docker compose start sparkyfitness-db`.
+</Warning>

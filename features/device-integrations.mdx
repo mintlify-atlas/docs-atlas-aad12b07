@@ -1,0 +1,282 @@
+---
+title: "Health Device and Service Integrations"
+sidebarTitle: "Device Integrations"
+description: "Connect SparkyFitness to Garmin, Fitbit, Apple Health, Google Health, Withings, Polar, Strava, and Hevy to automatically sync workouts, steps, sleep, and body metrics."
+---
+
+SparkyFitness connects to 8+ health platforms and devices to automatically pull your activity, workouts, sleep, and body metrics into your diary. OAuth-based services use standard authorization flows managed from **Settings → External Data Sources**, while mobile platforms sync through the native iOS and Android apps. You can also push data from any automation tool using the open `/api/health-data` REST endpoint.
+
+## Supported Integrations at a Glance
+
+<CardGroup cols={3}>
+  <Card title="Garmin Connect" icon="watch">
+    Steps, activities, sleep, heart rate, HRV, stress, nutrition, weight, and more via a dedicated microservice.
+  </Card>
+  <Card title="Fitbit" icon="heart-pulse">
+    Steps, activities, sleep stages, weight, and body fat via the Fitbit Web API (deprecated September 2026).
+  </Card>
+  <Card title="Google Health" icon="google">
+    Activity, health metrics, sleep, and workouts via the Google Health API — the recommended Fitbit replacement.
+  </Card>
+  <Card title="Withings" icon="scale-balanced">
+    Weight, body composition, blood pressure, heart rate, and sleep via Withings Health API.
+  </Card>
+  <Card title="Polar Flow" icon="bolt">
+    Workouts, weight, height, steps, and active calories via Polar AccessLink. *(Partially tested)*
+  </Card>
+  <Card title="Strava" icon="person-running">
+    Activities and workouts (distance, duration, calories, heart rate) plus athlete weight.
+  </Card>
+  <Card title="Hevy" icon="dumbbell">
+    Strength workouts with full set/rep/weight data from the Hevy app.
+  </Card>
+  <Card title="Apple Health (iOS)" icon="apple">
+    Health and activity data via the SparkyFitness iOS app.
+  </Card>
+</CardGroup>
+
+---
+
+## Health API Integrations (OAuth-based)
+
+All OAuth integrations follow the same pattern: navigate to **Settings → External Data Sources**, find the provider, enter your credentials, and click **Connect** to begin the OAuth authorization flow. Once connected, you can trigger a manual sync or let the scheduled sync run automatically.
+
+### Garmin Connect
+
+Garmin is the most comprehensive integration, pulling data across three sync phases:
+
+| Phase | Data Synced |
+|-------|-------------|
+| Health & Wellness | Steps, resting heart rate, HRV, stress level, respiration rate, blood pressure, weight, body fat, muscle mass, bone mass, body water, sleep duration, hydration |
+| Activities & Workouts | All Garmin activities with sport type, duration, calories, distance, GPS, and lap data |
+| Nutrition Diary | Calorie and macro totals logged in Garmin Connect |
+
+**Setup:** Garmin Connect uses direct credential login (email + password) rather than a browser OAuth flow. Enter your Garmin Connect credentials in the External Data Sources form. MFA is supported — if prompted, enter your one-time code in the follow-up dialog.
+
+<Note>
+  Garmin sync runs as a **separate microservice container** (`garmin-connect-service`). You must enable this container in your deployment for Garmin to work. If the microservice is not running, all Garmin sync requests will fail with a connection error.
+</Note>
+
+### Fitbit
+
+| Data | Details |
+|------|---------|
+| Steps | Daily step count |
+| Activities | Exercise name, duration, calories, distance, average heart rate |
+| Sleep | Sessions with deep, light, REM, and awake stage breakdown; efficiency score |
+| Weight | Body weight (kg) |
+| Body Fat | Body fat percentage |
+
+**Setup:** Register an application at [dev.fitbit.com](https://dev.fitbit.com) to obtain a **Client ID** and **Client Secret**. Paste them into the Fitbit entry in External Data Sources, then click **Connect**.
+
+<Warning>
+  The Fitbit Web API is being deprecated in **September 2026**. Fitbit devices syncing to Google Health Connect will continue to work after that date via the Google Health integration.
+</Warning>
+
+### Google Health
+
+Google Health is the recommended long-term replacement for Fitbit and supports any device that syncs to Google Health Connect (Fitbit, Wear OS, Pixel Watch, and others).
+
+| Category | Data Synced |
+|----------|-------------|
+| Activity | Steps, active zone minutes (fat burn / cardio / peak), activity minutes, distance, floors |
+| Health Metrics | Resting heart rate, HRV, SpO2, respiratory rate, skin temperature, body fat %, VO2 Max, daily calories, weight |
+| Sleep | Sessions with light, deep, REM, and awake stage breakdown |
+| Exercise | Workouts logged in Google Health with duration and calories |
+
+**Setup:**
+
+<Steps>
+  <Step title="Create a Google Cloud project">
+    Go to [console.cloud.google.com](https://console.cloud.google.com) and create a new project (or select an existing one).
+  </Step>
+  <Step title="Enable the Google Health API">
+    Navigate to **APIs & Services → Library**, search for **Google Health API**, and click **Enable**.
+  </Step>
+  <Step title="Configure the OAuth consent screen">
+    Go to **APIs & Services → OAuth consent screen**. Set User Type to **External**, fill in the required fields, and add all six required scopes (see below). Add your Google account as a test user, then **Publish the app** to prevent token revocation after 7 days.
+  </Step>
+  <Step title="Create OAuth 2.0 credentials">
+    Go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**. Set Application Type to **Web application**. Set the Authorized Redirect URI to the **Callback URL** shown in SparkyFitness under Settings → External Data Sources → Google Health → edit icon.
+  </Step>
+  <Step title="Connect in SparkyFitness">
+    Paste your **Client ID** and **Client Secret** into the Google Health entry, click **Save**, then **Connect**, and complete the Google OAuth consent flow.
+  </Step>
+</Steps>
+
+**Required OAuth Scopes:**
+
+```text
+https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly
+https://www.googleapis.com/auth/googlehealth.sleep.readonly
+https://www.googleapis.com/auth/googlehealth.location.readonly
+https://www.googleapis.com/auth/googlehealth.profile.readonly
+https://www.googleapis.com/auth/googlehealth.settings.readonly
+```
+
+<Note>
+  The Google Health API limits session-based queries to approximately 30 days. SparkyFitness automatically splits longer date ranges into 30-day chunks, so a full year import works — it just takes a bit longer.
+</Note>
+
+### Withings
+
+| Data | Details |
+|------|---------|
+| Body Measurements | Weight, BMI, body fat %, muscle mass, bone mass, hydration, visceral fat |
+| Cardiovascular | Systolic and diastolic blood pressure, heart rate |
+| Sleep | Total sleep duration, sleep score, deep / light / REM / awake stages |
+
+**Setup:** Go to [account.withings.com/partner/add](https://account.withings.com/partner/add) to register a developer application. Copy the **Client ID** and **Client Secret** into SparkyFitness, then click **Connect**.
+
+### Polar Flow
+
+| Data | Details |
+|------|---------|
+| Workouts | Cardio training sessions with duration, calories, and sport type |
+| Physical Info | Weight and height from your Polar profile |
+| Daily Activity | Steps, active calories, and total calories as custom measurements |
+
+**Setup:** Visit the [Polar AccessLink Admin](https://admin.polaraccesslink.com/) portal and create a new client. Use the **Callback URL** shown in SparkyFitness as the redirect URI. Copy the **Client ID** and **Client Secret** into SparkyFitness, then click **Connect**.
+
+<Warning>
+  Polar only delivers data uploaded **after** you authorize SparkyFitness. Historical workouts recorded before linking will not sync.
+</Warning>
+
+### Strava
+
+| Data | Details |
+|------|---------|
+| Activities | Activity name, sport type, distance (km), moving time, calories, average heart rate, elevation gain |
+| Athlete Weight | Body weight from your Strava athlete profile |
+
+**Setup:** Go to [strava.com/settings/api](https://www.strava.com/settings/api) and create an application to obtain a **Client ID** and **Client Secret**. Paste them into SparkyFitness and click **Connect**.
+
+<Note>
+  Strava integration is partially tested. If you encounter unexpected data, please share anonymized mock data with the community on [Discord](https://discord.gg/vcnMT5cPEA).
+</Note>
+
+### Hevy
+
+Hevy uses an **API Key** (not OAuth) to authenticate. The integration syncs your full strength-training history, including every workout, exercise, set, rep count, and weight.
+
+| Data | Details |
+|------|---------|
+| Workouts | Workout title, date, and total duration |
+| Exercises | Exercise name, sets with weight (kg), reps, set type (working, warm-up, drop set, failure) |
+
+**Setup:** In the Hevy app, go to **Settings → API Key** and copy your key. In SparkyFitness, add Hevy under External Data Sources and paste the API key.
+
+---
+
+## Mobile Health Apps
+
+### Apple Health (iOS)
+
+The SparkyFitness iOS app integrates with Apple Health to read health and activity data directly from your iPhone and Apple Watch. Data flows automatically when the app is installed and Health permissions are granted — no API credentials are required.
+
+### Google Health Connect (Android)
+
+The SparkyFitness Android app integrates with Google Health Connect to read steps, activity, and health measurements from compatible Android devices. Grant the necessary Health Connect permissions inside the app to begin syncing.
+
+---
+
+## Custom Integration: POST /api/health-data
+
+Any automation tool — iOS Shortcuts, Android Tasker, Zapier, or your own scripts — can push health data to SparkyFitness using the health data REST endpoint.
+
+### Authentication
+
+Generate a personal API key in **Settings → Profile → Personal API Key**, then include it in every request using one of these headers:
+
+```http
+Authorization: Bearer <your-api-key>
+```
+
+```http
+X-Api-Key: <your-api-key>
+```
+
+### Endpoint
+
+```
+POST /api/health-data
+```
+
+Accepts a single JSON object or an array of objects. Each object represents one data point.
+
+### Supported Data Types
+
+| `type` value | What it logs | `value` format |
+|---|---|---|
+| `weight` | Body weight | Number in kg |
+| `steps` or `step` | Daily step count | Integer |
+| `water` | Water intake | Integer in ml |
+| `Active Calories` | Active calories burned | Number in kcal |
+| `body_fat` or `body_fat_percentage` | Body fat percentage | Number (%) |
+| `height` | Body height | Number in cm |
+| *(any other string)* | Custom measurement | Number or string |
+
+### Request Body
+
+```json
+[
+  {
+    "type": "weight",
+    "value": 82.5,
+    "date": "2024-07-15"
+  },
+  {
+    "type": "steps",
+    "value": 9842,
+    "date": "2024-07-15"
+  },
+  {
+    "type": "water",
+    "value": 1750,
+    "date": "2024-07-15"
+  },
+  {
+    "type": "Active Calories",
+    "value": 420,
+    "date": "2024-07-15"
+  },
+  {
+    "type": "Blood Pressure Systolic",
+    "value": 118,
+    "date": "2024-07-15"
+  }
+]
+```
+
+### Example: iOS Shortcut
+
+```json
+POST https://your-sparky-instance.com/api/health-data
+Authorization: Bearer spk_xxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+
+{
+  "type": "steps",
+  "value": 7500,
+  "date": "2024-07-15"
+}
+```
+
+<Tip>
+  You can mix multiple types in a single request array. SparkyFitness processes each entry independently, so a partially valid payload still saves the valid entries.
+</Tip>
+
+### Generating an API Key
+
+<Steps>
+  <Step title="Open Settings">
+    Navigate to your profile icon and open **Settings**.
+  </Step>
+  <Step title="Find Personal API Key">
+    Scroll to the **Personal API Key** section.
+  </Step>
+  <Step title="Generate key">
+    Click **Generate API Key**. Copy the key immediately — it will not be shown again in full.
+  </Step>
+</Steps>

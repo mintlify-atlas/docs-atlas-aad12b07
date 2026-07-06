@@ -1,0 +1,167 @@
+---
+title: "User Settings, Preferences, and Profile Configuration"
+sidebarTitle: "User Settings"
+description: "Configure your SparkyFitness profile, unit preferences, nutrient display, dashboard layout, login methods, and notification settings."
+---
+
+SparkyFitness offers a comprehensive settings area that lets you personalize every aspect of the application — from the units displayed throughout the interface and which nutrients appear in your diary, to how your calorie goal is calculated, which login methods are active on your account, and how your dashboard is arranged. All settings live under the **Settings** panel in the application sidebar and are applied only to your account; changes you make here are never visible to or modifiable by delegates who have shared access to your profile.
+
+## Profile Settings
+
+Your profile stores the personal data that SparkyFitness uses to calculate calorie and macronutrient goals.
+
+| Field | Description |
+|:---|:---|
+| **Display Name** | The name shown throughout the application and in the Profile Switcher for delegates. |
+| **Date of Birth** | Used together with height and weight to compute BMR and age-dependent estimates. |
+| **Height** | Used in BMR formulas (Mifflin-St Jeor, Harris-Benedict, Oxford). Stored in your chosen unit. |
+| **Avatar** | An optional profile picture shown in the top-right corner and in the Profile Switcher. |
+| **Timezone** | Controls which calendar day is considered "today" for diary entries and check-ins. The app can bootstrap your timezone automatically from your device the first time you sign in. |
+
+<Note>
+  Profile data (name, date of birth, height, avatar) can be read by delegates who hold at least one of `can_manage_diary`, `can_manage_checkin`, `can_manage_medications`, or `can_view_reports`. Only you can modify it.
+</Note>
+
+## Unit Preferences
+
+SparkyFitness supports both metric and imperial unit systems. You can switch between them at any time; historical data is converted automatically for display.
+
+| Measurement | Metric | Imperial |
+|:---|:---|:---|
+| **Weight** | Kilograms (kg) | Pounds (lbs) |
+| **Height** | Centimetres (cm) | Feet and inches (ft/in) |
+| **Energy** | Kilocalories (kcal) | Kilojoules (kJ) |
+| **Distance** | Kilometres (km) | Miles (mi) |
+
+## Nutrient Display
+
+The **Nutrient Display** settings control which nutrients appear as columns in the food diary and in reports. You can show or hide individual nutrients to keep your diary focused on the macros and micronutrients that matter most to your goals.
+
+Changes to nutrient display preferences take effect immediately across the diary, daily summary panels, and report charts. These preferences are readable by delegates holding diary, check-in, medication, or report permissions — but only you can change them.
+
+## Calculation Settings
+
+SparkyFitness supports several BMR formulas and calorie goal adjustment methods to match how you prefer to track your energy balance.
+
+<Accordion title="BMR Formula">
+  Choose the formula used to estimate your Basal Metabolic Rate. Available options include:
+
+  | Formula | Required Inputs | Best For |
+  |:---|:---|:---|
+  | **Mifflin-St Jeor** *(default)* | Age, gender, height, weight | General population |
+  | **Revised Harris-Benedict** | Age, gender, height, weight | Historical comparison |
+  | **Katch-McArdle** | Weight, body fat % | Users who track body fat |
+  | **Cunningham** | Weight, body fat % | Highly athletic builds |
+  | **Oxford** | Weight, gender | Varied age groups and demographics |
+</Accordion>
+
+<Accordion title="Daily Calorie Goal Adjustment">
+  This setting determines how physical activity changes your calorie budget throughout the day:
+
+  - **Adaptive TDEE** — Dynamically computes your metabolic expenditure by correlating actual weight changes with historical calorie intake over the last 35 days. Falls back to BMR × activity multiplier if fewer than 14 days of data are available.
+  - **Dynamic Goal** — Increases your budget as you burn active calories or take steps.
+  - **Fixed Goal** — Your calorie target stays completely static, ignoring daily exercise.
+  - **Percentage Earn-Back** — Adds back a custom percentage (e.g. 50 %) of active calories burned as a buffer against device over-estimations.
+  - **Device Projection** — Projects your full-day burn by extrapolating active steps and device data to midnight (similar to MyFitnessPal).
+</Accordion>
+
+<Accordion title="Goal Mode & Deficit">
+  Goal Mode applies a body composition percentage-based deficit or maintenance target to your baseline maintenance calories:
+
+  | Mode | Deficit | Purpose |
+  |:---|:---|:---|
+  | Maintain | 0 % | Weight maintenance |
+  | Body Recomposition | 10 % | Gain muscle while losing fat |
+  | Cut | 15 % | Steady fat loss |
+  | High Cut | 20 % | Aggressive fat loss |
+  | Manual | 0 %–40 % | Personalized deficit rate |
+
+  SparkyFitness enforces metabolic safety floors: your target will not be allowed to drop below your Resting Metabolic Rate or the absolute clinical floor (1 200 kcal for biological females; 1 500 kcal for biological males).
+</Accordion>
+
+## Dashboard Layout
+
+The dashboard is made up of configurable widgets. You can reorder, show, or hide individual widgets to keep the dashboard focused on the data you check most often. Layout preferences are stored per-user and are readable by delegates who hold diary, check-in, medication, or report permissions.
+
+## Login & Security
+
+The **Login Management** section lets you control how you authenticate with SparkyFitness.
+
+<CardGroup cols={2}>
+  <Card title="Email & Password" icon="envelope">
+    Update your email address or change your password at any time.
+  </Card>
+  <Card title="OIDC SSO Connections" icon="link">
+    Link or unlink external identity providers (e.g. Google, GitHub) for single sign-on. OIDC links are strictly private and never visible to delegates.
+  </Card>
+  <Card title="TOTP (Authenticator App)" icon="shield">
+    Enable time-based one-time password two-factor authentication using any TOTP-compatible app.
+  </Card>
+  <Card title="Passkeys" icon="fingerprint">
+    Register hardware security keys or platform passkeys (Face ID, Touch ID, Windows Hello) for passwordless login.
+  </Card>
+  <Card title="API Keys" icon="key">
+    Generate and revoke personal API keys for programmatic access to your data. API keys are strictly private and never shared with delegates.
+  </Card>
+</CardGroup>
+
+## External Providers
+
+The **External Providers** section is where you connect food databases and fitness devices. Connected providers allow SparkyFitness to automatically sync activity data, weight, and other measurements.
+
+Supported providers include:
+
+- **Food Databases**: OpenFoodFacts, USDA, FatSecret, Nutritionix, Mealie, Tandoor
+- **Fitness & Health Devices**: Apple Health (iOS), Google Health Connect (Android), Fitbit, Garmin Connect, Withings, Polar Flow, Strava, Hevy
+
+<Note>
+  Health device integrations (Garmin, Fitbit, Withings, Google Health, Polar, Strava, Hevy) are **strictly private** and never shared with delegates, even if you grant `share_external_providers`. That permission only covers non-private food and exercise search providers such as FatSecret, USDA, and OpenFoodFacts.
+</Note>
+
+For mobile device health sync (Apple Health and Google Health Connect), see the [Mobile App](/features/mobile-app) page.
+
+## Cycle Hub
+
+The **Cycle & Pregnancy** section in Settings opens SparkyFitness's self-hosted, privacy-first reproductive health tracking suite. All cycle and pregnancy data is **strictly private** — it is never shared with delegates or included in any shared report, even if you have granted `can_view_reports`.
+
+Navigate to **Settings → Cycle & Pregnancy** to configure:
+
+- **Current Mode** — choose the tracking mode that matches your current phase
+- **Cycle & Period Length** — set fallback average cycle length and period duration
+- **Birth Control Method** — calibrates the prediction engine
+- **Discreet Mode** — replaces all Cycle Hub labels, icons, and navigation entries with a neutral "Wellness" label
+
+### Tracking Modes
+
+<CardGroup cols={3}>
+  <Card title="Standard (Period Tracking)" icon="calendar">
+    Tracks menstruation history, forecasts upcoming periods, and logs symptoms. Predicts the next 3 cycles and estimates ovulation and fertile windows.
+  </Card>
+  <Card title="Trying to Conceive (TTC)" icon="heart">
+    Advanced fertility tracking with OPK/LH test logging, BBT biphasic detection, cervical mucus and position picker, and a Two-Week Wait countdown widget.
+  </Card>
+  <Card title="Pregnancy" icon="baby">
+    Shifts focus to gestational milestones: week-by-week baby size and tips, kick counter, contraction timer with 5-1-1 alert, bump photo journal, and prenatal vital tracking.
+  </Card>
+</CardGroup>
+
+<Note>
+  Postpartum and Menopause modes are currently roadmap items and are not yet active in onboarding.
+</Note>
+
+### Daily Cycle Logging
+
+From the Cycle Hub you can record:
+
+- **Flow tracking** — four intensity levels (Spotting, Light, Medium, Heavy)
+- **BBT logging** — waking temperature to the hundredths decimal place for biphasic ovulation detection
+- **40+ symptoms and moods** — physical symptoms (Cramps, Headache, Fatigue, Insomnia, Acne, and more), emotional states, daily medication compliance, and intercourse logs
+- **Sleep, water, weight, and energy** — daily wellness metrics with a read-only glance header showing today's totals
+
+## Onboarding
+
+If you want to revisit your initial setup choices — goals, activity level, preferred units, or BMR formula — you can re-run the setup wizard at any time from the **Onboarding** section of Settings. Completing the wizard again updates your stored onboarding data and recalculates your goals.
+
+## Theme
+
+SparkyFitness supports both **Light** and **Dark** themes. The active theme can be toggled from the Settings panel or, on supported devices, follows your operating system's appearance setting automatically. Theme preference is stored as part of your `user_preferences` and is applied immediately across the entire application.

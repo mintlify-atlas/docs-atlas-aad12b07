@@ -1,0 +1,191 @@
+---
+title: "Nutrition Diary: Log Meals and Track Macros"
+sidebarTitle: "Nutrition Diary"
+description: "Log meals across breakfast, lunch, dinner, and snacks in SparkyFitness. Search food databases, create custom foods, and analyze daily macros and micronutrients."
+---
+
+The Nutrition Diary is the central hub of your daily food logging experience in SparkyFitness. Every food you eat throughout the day flows through the diary — organized by meal type, tallied against your calorie and macro goals, and stored privately on your own server. Whether you're meticulously tracking macros or simply keeping an eye on calorie intake, the diary gives you a clear, real-time picture of what you've eaten and what's left in your budget for the day.
+
+## Logging Food
+
+Adding a food entry takes just a few seconds. Navigate to the diary for the desired date, choose a meal slot, and search for the food item by name. Once you find the item, set the serving size and quantity, then confirm. The entry immediately appears in your diary and the daily nutrition totals update.
+
+<Steps>
+  <Step title="Open the Diary">
+    Navigate to the **Diary** page and select the date you want to log for.
+  </Step>
+  <Step title="Choose a Meal Slot">
+    Tap or click **Add Food** within the appropriate meal section — Breakfast, Lunch, Dinner, or Snacks.
+  </Step>
+  <Step title="Search for a Food">
+    Type the food name in the search bar. Results are drawn from the built-in database, your custom foods, and any enabled external databases. See [Food Databases](/features/food-databases) for details on available search providers.
+  </Step>
+  <Step title="Set Serving Details">
+    Select the serving unit, adjust the quantity, and confirm. The macro and calorie values update in real time as you adjust the amount.
+  </Step>
+  <Step title="Save the Entry">
+    Tap **Add** to save. The food appears in the meal section and your daily totals are updated instantly.
+  </Step>
+</Steps>
+
+<Tip>
+  Use the SparkyFitness AI assistant to log food hands-free. Just describe what you ate in plain language — "I had two scrambled eggs and a slice of whole wheat toast" — and the assistant will find the matching items and create the diary entries for you.
+</Tip>
+
+## Meal Types
+
+The diary organizes entries into distinct meal slots to mirror a typical eating pattern. Each meal slot is tracked independently so you can see a per-meal breakdown as well as a daily total.
+
+<CardGroup cols={2}>
+  <Card title="Breakfast" icon="sun">
+    Morning meals and drinks logged at the start of your day.
+  </Card>
+  <Card title="Lunch" icon="utensils">
+    Midday meals, lunches, and midday snacks.
+  </Card>
+  <Card title="Dinner" icon="moon">
+    Evening meals and dinner-time drinks.
+  </Card>
+  <Card title="Snacks" icon="apple-whole">
+    Between-meal snacks, desserts, and extras logged outside main meal windows.
+  </Card>
+</CardGroup>
+
+In addition to the four default slots, SparkyFitness supports **custom meal types**. You can create named meal slots — such as Pre-Workout, Post-Workout, or Afternoon Tea — from your diary settings, and those custom slots appear alongside the defaults in every diary view.
+
+## Custom Foods
+
+When a food you eat regularly isn't found in any connected database, you can create it yourself. Custom foods are stored in your personal food library and are available from any diary date going forward.
+
+To create a custom food:
+
+1. Open **Settings → Foods** (or the custom food panel from the search results page).
+2. Click **Create Custom Food**.
+3. Enter a name, brand (optional), serving size, and unit.
+4. Fill in the nutritional values: calories, protein, carbohydrates, fat, and any micronutrients you track.
+5. Save the food — it immediately becomes searchable in the diary.
+
+<Note>
+  Custom foods belong to your account only. They are not shared with the global food database and remain private to your self-hosted instance.
+</Note>
+
+## Recipes & Meals
+
+Meal templates let you group multiple foods into a single reusable item. Once saved, you can add an entire recipe or composite meal to your diary in one action rather than entering each ingredient individually.
+
+<Accordion title="Creating a Meal Template">
+  1. Navigate to **Settings → Meals** or the **Meals** section in the diary sidebar.
+  2. Click **Create New Meal**.
+  3. Give the meal a name (e.g., "Overnight Oats" or "Chicken Rice Bowl").
+  4. Search for and add each ingredient with its quantity.
+  5. Save the meal. SparkyFitness calculates the combined nutritional totals automatically.
+</Accordion>
+
+<Accordion title="Using a Meal in the Diary">
+  1. In the diary, tap **Add Food** in any meal slot.
+  2. Switch to the **Meals** tab in the search panel.
+  3. Select your saved meal and choose the number of servings.
+  4. All ingredient entries are added to the diary at once, with quantities scaled to the chosen serving count.
+</Accordion>
+
+## Diary View
+
+The diary view shows each meal section with its individual food entries and a daily summary banner at the top or bottom of the page. The summary displays:
+
+- **Calories consumed** vs. your daily calorie goal
+- **Protein, carbohydrates, and fat** in grams and as a percentage of total calories
+- **Remaining calories** and remaining macro budget for the day
+- **Exercise calories** earned, which can optionally increase your remaining budget
+
+The macro breakdown is rendered as a progress bar or ring chart so you can see at a glance whether you are tracking close to your targets.
+
+## Copying Entries
+
+Re-logging the same foods from a previous day is quick with the copy feature. You can copy at the meal level or for the entire day.
+
+<Tabs>
+  <Tab title="Copy a Single Meal">
+    Inside any meal section, choose **Copy from Previous Day** (or select a specific date). All food entries from that meal on the chosen source date are duplicated into the current diary date.
+
+    The API endpoint used for this operation is:
+
+    ```http
+    POST /api/food-entries/copy
+    {
+      "sourceDate": "2025-01-10",
+      "sourceMealType": "Breakfast",
+      "targetDate": "2025-01-11",
+      "targetMealType": "Breakfast"
+    }
+    ```
+  </Tab>
+  <Tab title="Copy Yesterday's Meal">
+    Use the **Copy Yesterday** shortcut to pull a single meal from the immediately preceding day without needing to specify a date:
+
+    ```http
+    POST /api/food-entries/copy-yesterday
+    {
+      "mealType": "Lunch",
+      "targetDate": "2025-01-11"
+    }
+    ```
+  </Tab>
+  <Tab title="Copy Entire Day">
+    To copy all meals across all slots from one day to another:
+
+    ```http
+    POST /api/food-entries/copy-all
+    {
+      "sourceDate": "2025-01-10",
+      "targetDate": "2025-01-11"
+    }
+    ```
+  </Tab>
+  <Tab title="Copy from a Family Member">
+    Family diary sharing lets you copy meals from another household member's diary into your own:
+
+    ```http
+    POST /api/food-entries/copy-from-user
+    {
+      "familyUserId": "<uuid>",
+      "sourceDate": "2025-01-10",
+      "sourceMealType": "Dinner",
+      "targetDate": "2025-01-11",
+      "targetMealType": "Dinner"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Nutrient Tracking
+
+SparkyFitness tracks far more than the three primary macros. The full nutrient profile for each food entry can include:
+
+<CardGroup cols={2}>
+  <Card title="Macronutrients" icon="chart-pie">
+    Calories, protein, carbohydrates (total and net), dietary fiber, and fat (total, saturated, unsaturated).
+  </Card>
+  <Card title="Micronutrients" icon="flask">
+    Vitamins (A, C, D, E, K, B-complex) and minerals (calcium, iron, magnesium, potassium, sodium, zinc).
+  </Card>
+  <Card title="Custom Nutrients" icon="sliders">
+    Define additional nutrients that matter to you — for example, omega-3s, caffeine, or electrolytes — and track them just like built-in values.
+  </Card>
+  <Card title="Weekly & Monthly Trends" icon="chart-line">
+    Micronutrient and trend data is surfaced in the **Reports** section, where you can view averages over a custom date range.
+  </Card>
+</CardGroup>
+
+<Note>
+  The daily diary view focuses on macros and calories for a fast at-a-glance summary. Visit the **Reports** page to see micronutrient breakdowns and multi-day trend charts.
+</Note>
+
+## Exporting Your Diary
+
+Your complete food entry history can be exported as a CSV file for use in spreadsheets or external analysis tools:
+
+```http
+GET /api/food-entries/export/csv?delimiter=;&locale=en
+```
+
+The `delimiter` parameter accepts any character (default `;`) and `locale` controls number formatting. The downloaded file is named `sparkyfitness_diary_export.csv`.

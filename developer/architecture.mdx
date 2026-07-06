@@ -1,0 +1,301 @@
+---
+title: "SparkyFitness System Architecture and Tech Stack"
+sidebarTitle: "Architecture"
+description: "Overview of SparkyFitness's full-stack architecture: React 18 frontend, Node.js/Express backend, PostgreSQL with Row-Level Security, and Docker-based deployment."
+---
+
+SparkyFitness follows a client-server model with a clear separation of concerns between the frontend, backend, and database. The React frontend communicates with a Node.js/Express API over HTTP, which in turn reads and writes to PostgreSQL — enforcing per-user data isolation through Row-Level Security policies — and fans out to AI providers and external data sources such as food databases and device integrations.
+
+## Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     SparkyFitness Architecture                  │
+└─────────────────────────────────────────────────────────────────┘
+
+                              User
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   React Frontend    │
+                    │  (Vite + TypeScript)│
+                    └──────────┬──────────┘
+                               │ HTTP/API
+                               ▼
+                    ┌─────────────────────┐
+                    │ Node.js/Express API │
+                    │     (Backend)       │
+                    └──────────┬──────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+    ┌─────────────────┐ ┌─────────────┐ ┌─────────────────┐
+    │  PostgreSQL     │ │ AI Services │ │  External APIs  │
+    │   Database      │ │             │ │                 │
+    │   (with RLS)    │ │ • OpenAI    │ │ • Nutritionix   │
+    └─────────────────┘ │ • Google    │ │ • OpenFoodFacts │
+                        │ • Anthropic │ │ • FatSecret     │
+                        └─────────────┘ │ • Wger          │
+                                        └─────────────────┘
+```
+
+## Technology Stack
+
+<CardGroup cols={2}>
+  <Card title="Frontend" icon="browser">
+    - **React 18** with TypeScript
+    - **Vite** for fast dev builds and HMR
+    - **Tailwind CSS** + **shadcn/ui** component library
+    - **TanStack Query** for server-state management
+    - **React Router v6** for client-side routing
+    - **Fetch API** as the HTTP client
+  </Card>
+  <Card title="Backend" icon="server">
+    - **Node.js** runtime with **Express 5** framework
+    - **PostgreSQL 15+** with Row-Level Security
+    - **Better Auth** library for authentication
+    - **JWT** token-based session management
+    - **Zod** for runtime request/response validation
+    - Repository pattern for all database access
+  </Card>
+  <Card title="AI Integration" icon="sparkles">
+    - Multi-provider routing: OpenAI, Anthropic, Google Gemini
+    - Any OpenAI-compatible endpoint
+    - Natural-language food logging and image analysis
+    - AI-assisted goal setting and progress tracking
+  </Card>
+  <Card title="Deployment" icon="cloud">
+    - **Docker** with multi-stage builds
+    - **Docker Compose** for dev and prod environments
+    - **Kubernetes / Helm** charts for cluster deployments
+    - **Nginx** reverse proxy for static serving and SSL termination
+  </Card>
+</CardGroup>
+
+## Directory Structure
+
+The repository is a **pnpm monorepo** (`pnpm-workspace.yaml`) containing the following packages:
+
+```
+SparkyFitness/
+├── SparkyFitnessFrontend/    # React 18 + Vite web application
+├── SparkyFitnessServer/      # Express 5 + PostgreSQL backend API
+├── SparkyFitnessMobile/      # Expo SDK / React Native mobile app
+├── SparkyFitnessGarmin/      # Standalone Python Garmin integration service
+├── shared/                   # @workspace/shared — TypeScript schemas,
+│                             #   constants, timezone & day helpers
+├── docker/                   # Docker Compose files, Dockerfiles,
+│                             #   Nginx config templates, helper scripts
+├── helm/                     # Kubernetes Helm chart
+├── docs/                     # Nuxt / Docus documentation site
+└── db_schema_backup.sql      # Repo-root schema snapshot (kept in sync
+                              #   with server migrations)
+```
+
+<Note>
+  `SparkyFitnessGarmin/` is outside the pnpm workspace. Inspect its own `requirements.txt` and scripts before working there. The root `package.json` is tooling-only (`husky`, `lint-staged`, `prettier`) — it is not an app entrypoint.
+</Note>
+
+## Frontend Architecture
+
+The `SparkyFitnessFrontend/src/` directory follows a feature-oriented, component-driven structure:
+
+```
+src/
+├── api/          # API functions and TanStack Query keys
+├── assets/       # Static assets (images, icons)
+├── components/   # Reusable UI components (shadcn/ui-based)
+├── constants/    # App-wide constant values
+├── contexts/     # React Context providers (auth, preferences, active user)
+├── hooks/        # Custom hooks wrapping useQuery / useMutation
+├── i18n.ts       # i18next initialisation
+├── layouts/      # Reusable page layout shells
+├── lib/          # Low-level utilities (cn helper, etc.)
+├── pages/        # Top-level page components composed from smaller pieces
+├── schemas/      # Frontend Zod schemas / validation
+├── services/     # API service layer with type-safe interfaces
+├── tests/        # Jest + Testing Library test suites
+├── types/        # Shared TypeScript type definitions
+└── utils/        # Shared utility functions and logging helpers
+```
+
+### TanStack Query data-fetching pattern
+
+SparkyFitness uses **TanStack Query** (formerly React Query) throughout the frontend for server-state management. The pattern is consistent across all feature areas:
+
+```typescript
+// src/api/userApi.ts — define the fetcher and query keys together
+import { api } from '@/services/api';
+
+export const userKeys = {
+  all: ['users'] as const,
+  detail: (id: string) => [...userKeys.all, id] as const,
+};
+
+export const getUsers = () => api.get('/users');
+
+// src/hooks/useUsers.ts — wrap in a typed custom hook
+import { useQuery } from '@tanstack/react-query';
+import { userKeys, getUsers } from '@/api/userApi';
+
+export const useUsers = () =>
+  useQuery({ queryKey: userKeys.all, queryFn: getUsers });
+
+// Component.tsx — consume the hook
+import { useUsers } from '@/hooks/useUsers';
+
+const UserList = () => {
+  const { data: users, isLoading, isError } = useUsers();
+  if (isLoading) return <LoadingSpinner />;
+  if (isError)   return <ErrorMessage />;
+  return <>{/* render users */}</>;
+};
+```
+
+## Backend Architecture
+
+The `SparkyFitnessServer/` directory uses a layered architecture:
+
+```
+SparkyFitnessServer/
+├── routes/         # Express route handlers organised by feature domain
+├── models/         # Repository pattern — all database access lives here
+├── services/       # Business logic and orchestration
+├── integrations/   # External service connectors (food, devices, AI)
+├── ai/             # AI provider configurations and routing logic
+├── middleware/     # Auth checks, logging, error handling, rate limiting
+├── schemas/        # Zod request/response schemas for new endpoints
+├── db/             # Migration files and RLS policy SQL
+├── utils/          # Backend utilities (secret loader, timezone helpers)
+└── types/          # Shared TypeScript types for the server
+```
+
+### Repository pattern example
+
+All database operations are wrapped in repository objects with explicit transaction management:
+
+```typescript
+const userRepository = {
+  async createUser(userData: CreateUserInput) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // ... parameterised queries
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+};
+```
+
+## Database Security Tiers
+
+Every user-specific table is classified into one of three security tiers enforced through PostgreSQL Row-Level Security policies (`SparkyFitnessServer/db/rls_policies.sql`). Two PostgreSQL session functions drive access decisions:
+
+- **`current_user_id()`** — the active profile context being viewed (changes during family delegation).
+- **`authenticated_user_id()`** — the true logged-in actor (never changes).
+
+<Accordion title="Tier 1 — Strictly Private (owner-only read & write)">
+  These tables contain highly sensitive credentials, authentication secrets, and private logs. **Only the account owner (`authenticated_user_id()`) can read or modify these records.** Family delegates and context-switched API keys have zero access.
+
+  Key tables in this tier include:
+
+  | Table | Description |
+  |---|---|
+  | `user` | Account identity, password hash, role, email status |
+  | `two_factor` | 2FA recovery codes and secrets |
+  | `api_key` | User-generated API keys for external access |
+  | `user_oidc_links` | OpenID Connect SSO credential links |
+  | `passkey` | Passkey credentials for passwordless login |
+  | `session` | Active authentication sessions |
+  | `sparky_chat_history` | AI Assistant chat messages and history |
+  | `cycle_settings` | Cycle & pregnancy hub settings |
+  | `cycle_daily_entries` | Per-day cycle logs (flow, BBT, cervical mucus, moods) |
+  | `pregnancies` | Pregnancy records |
+  | `health_appointments` | Prenatal and other health appointments |
+</Accordion>
+
+<Accordion title="Tier 2 — View-Only Shared (owner write, delegate read)">
+  These tables contain user profiles, layout preferences, and custom library content. Delegates can **read** this data to render a family member's dashboard, but only the account owner can create or modify records.
+
+  Key tables in this tier include:
+
+  | Table | Description |
+  |---|---|
+  | `profiles` | Full name, height, display metrics |
+  | `user_preferences` | Unit preferences (Metric vs Imperial) |
+  | `user_dashboard_layouts` | Dashboard widget positions |
+  | `foods` / `food_variants` | Custom food items and serving sizes |
+  | `meals` / `meal_foods` | Custom meals and their ingredients |
+  | `exercises` | Custom exercise definitions |
+  | `workout_presets` | Custom workout templates |
+  | `external_data_providers` | Configured API integrations |
+  | `user_goals` | Active daily calorie/macro goals |
+  | `family_access` | Sharing rules and delegation credentials |
+</Accordion>
+
+<Accordion title="Tier 3 — Delegate-Writable (daily logs & schedules)">
+  These tables contain daily diary entries, wellness logs, and scheduler items. Caregivers and delegates with active delegation permissions can **read and write** on behalf of the owner.
+
+  Sub-tiers within Tier 3:
+
+  - **Diary logs** (`can_manage_diary`): `food_entries`, `exercise_entries`, `water_intake`, `meal_plan_template_assignments`, etc.
+  - **Medication & symptom logs** (`can_manage_medications`): `medications`, `medication_entries`, `injection_entries`, `symptom_entries`, etc.
+  - **Check-in & wellness logs** (`can_manage_checkin`): `check_in_measurements`, `sleep_entries`, `fasting_logs`, `mood_entries`, etc.
+</Accordion>
+
+## Authentication
+
+SparkyFitness uses the **Better Auth** library to handle authentication flows:
+
+<CardGroup cols={2}>
+  <Card title="Session methods" icon="key">
+    - Email + password with JWT sessions
+    - OIDC / SSO via configured providers (Google, Apple, etc.)
+    - Passkeys for passwordless login
+    - TOTP two-factor authentication
+  </Card>
+  <Card title="Access control" icon="shield">
+    - JWT tokens with configurable expiration
+    - Family delegation via `family_access` table
+    - `current_user_id()` / `authenticated_user_id()` context functions
+    - Per-permission role flags (`can_manage_diary`, `can_view_reports`, etc.)
+  </Card>
+</CardGroup>
+
+## AI Integration
+
+SparkyFitness routes AI requests to multiple providers through a unified router, persisting chat history exclusively for the authenticated owner (Tier 1).
+
+```
+                       AI Integration Flow
+
+User ──► Chat Interface ──► AI Router ──┬──► OpenAI GPT
+                                        ├──► Google Gemini
+                                        └──► Anthropic Claude
+                                               │
+                                               ▼
+                                           Database
+                                               │
+                                     ┌─────────┼─────────┐
+                                     ▼         ▼         ▼
+                               Food Diary  Measurements  Goals &
+                                                        Progress
+```
+
+**AI capabilities:**
+
+- Natural-language food entry and nutrition analysis
+- Photo-based food recognition and logging
+- Intelligent progress analysis and recommendations
+- AI-assisted goal setting and tracking
+- Conversational body measurement entry
+- Unit conversion assistance
+
+**Supported providers:** OpenAI GPT, Google Gemini, Anthropic Claude, and any OpenAI-compatible endpoint (configured via `ai_service_settings`).

@@ -1,0 +1,458 @@
+---
+title: "SparkyFitness Database Schema and Migration Guide"
+sidebarTitle: "Database"
+description: "Understand the SparkyFitness PostgreSQL schema, Row-Level Security model, migration process, and database security tier architecture."
+---
+
+SparkyFitness uses **PostgreSQL 15+** as its primary data store. Row-Level Security (RLS) policies are the foundation of its multi-user isolation model — every user-specific table carries RLS policies that prevent one account from ever reading or modifying another account's data. The schema follows a normalised design with audit timestamps on every table, UUID primary keys, and snake\_case naming throughout.
+
+## Schema Design Principles
+
+- **Tables** — snake\_case, plural (e.g. `food_diary_entries`, `user_preferences`)
+- **Columns** — snake\_case (e.g. `created_at`, `user_id`, `total_calories`)
+- **Foreign keys** — `{table_name}_id` format (e.g. `user_id`, `food_item_id`)
+- **Indexes** — descriptive names (e.g. `idx_food_diary_user_date`)
+- **Primary keys** — UUID using `gen_random_uuid()`
+- **Audit fields** — `created_at` and `updated_at` on every table, updated via triggers
+
+## Schema Overview
+
+### User Management
+
+<Accordion title="users — core account identity">
+  ```sql
+  CREATE TABLE users (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email         VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    full_name     VARCHAR(255),
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+<Accordion title="user_preferences — per-user application settings">
+  ```sql
+  CREATE TABLE user_preferences (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    theme       VARCHAR(20)  DEFAULT 'system',
+    ai_provider VARCHAR(50)  DEFAULT 'openai',
+    units_system VARCHAR(10) DEFAULT 'metric',
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+### Food Tracking
+
+<Accordion title="food_items — master food catalogue">
+  ```sql
+  CREATE TABLE food_items (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       VARCHAR(255) NOT NULL,
+    brand      VARCHAR(255),
+    barcode    VARCHAR(50),
+    source     VARCHAR(50),   -- 'user', 'nutritionix', 'openfoodfacts', etc.
+    source_id  VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+<Accordion title="nutrition_data — nutritional info per food item">
+  ```sql
+  CREATE TABLE nutrition_data (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    food_item_id  UUID NOT NULL REFERENCES food_items(id) ON DELETE CASCADE,
+    serving_size  DECIMAL(10,2),
+    serving_unit  VARCHAR(50),
+    calories      DECIMAL(10,2),
+    protein       DECIMAL(10,2),
+    carbohydrates DECIMAL(10,2),
+    fat           DECIMAL(10,2),
+    fiber         DECIMAL(10,2),
+    sugar         DECIMAL(10,2),
+    sodium        DECIMAL(10,2),
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+<Accordion title="food_diary — user daily food intake entries">
+  ```sql
+  CREATE TABLE food_diary (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    food_item_id UUID NOT NULL REFERENCES food_items(id),
+    quantity     DECIMAL(10,2) NOT NULL,
+    unit         VARCHAR(50)   NOT NULL,
+    meal_type    VARCHAR(20)   NOT NULL, -- 'breakfast','lunch','dinner','snack'
+    consumed_at  TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+### Exercise Tracking
+
+<Accordion title="exercises — master exercise catalogue">
+  ```sql
+  CREATE TABLE exercises (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name          VARCHAR(255) NOT NULL,
+    category      VARCHAR(100),
+    muscle_groups TEXT[],
+    equipment     VARCHAR(100),
+    instructions  TEXT,
+    source        VARCHAR(50) DEFAULT 'user',
+    source_id     VARCHAR(255),
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+<Accordion title="exercise_diary — user exercise session entries">
+  ```sql
+  CREATE TABLE exercise_diary (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    exercise_id      UUID NOT NULL REFERENCES exercises(id),
+    duration_minutes INTEGER,
+    sets             INTEGER,
+    reps             INTEGER,
+    weight           DECIMAL(10,2),
+    distance         DECIMAL(10,2),
+    notes            TEXT,
+    performed_at     TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+### Measurements and Check-ins
+
+<Accordion title="measurements — body measurements and health metrics">
+  ```sql
+  CREATE TABLE measurements (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type        VARCHAR(50)   NOT NULL, -- 'weight','body_fat','muscle_mass', etc.
+    value       DECIMAL(10,2) NOT NULL,
+    unit        VARCHAR(20)   NOT NULL,
+    measured_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+### Goals and Presets
+
+<Accordion title="goals — fitness and nutrition goals">
+  ```sql
+  CREATE TABLE goals (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type          VARCHAR(50) NOT NULL, -- 'weight_loss','muscle_gain','calorie_target'
+    target_value  DECIMAL(10,2),
+    target_unit   VARCHAR(20),
+    target_date   DATE,
+    current_value DECIMAL(10,2),
+    status        VARCHAR(20) DEFAULT 'active', -- 'active','completed','paused'
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+</Accordion>
+
+### AI Chat History
+
+<Accordion title="chat_history — AI assistant conversations">
+  ```sql
+  CREATE TABLE chat_history (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message         TEXT NOT NULL,
+    response        TEXT NOT NULL,
+    ai_provider     VARCHAR(50),
+    model_used      VARCHAR(100),
+    tokens_used     INTEGER,
+    response_time_ms INTEGER,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  ```
+
+  <Warning>
+    `chat_history` (mapped as `sparky_chat_history` in RLS policies) is a **Tier 1 strictly-private** table. Family delegates have absolutely no access to this data regardless of their permission level.
+  </Warning>
+</Accordion>
+
+### Integration Tokens and Provider Configuration
+
+<Accordion title="external_data_providers — configured API integrations">
+  ```sql
+  -- Tier 2 table: owner writes, delegates with share_external_providers can read
+  -- Stores per-user FatSecret, USDA, Nutritionix, Withings, Garmin, etc. config
+  ```
+
+  The `external_data_providers` table stores the encrypted credentials and configuration for each user's enabled integrations. API keys are always encrypted at rest using the `SPARKY_FITNESS_API_ENCRYPTION_KEY`.
+</Accordion>
+
+### Family Sharing
+
+<Accordion title="family_access — delegation permissions">
+  ```sql
+  CREATE TABLE family_access (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    grantor_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    grantee_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    access_type      VARCHAR(50) NOT NULL,
+      -- 'can_manage_diary', 'can_view_reports', 'can_manage_checkin',
+      -- 'can_manage_medications', 'can_view_food_library',
+      -- 'can_view_exercise_library', 'share_external_providers'
+    granted_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(grantor_user_id, grantee_user_id, access_type)
+  );
+  ```
+</Accordion>
+
+## Row-Level Security (RLS)
+
+RLS is enabled on every user-specific table so that the database engine itself enforces data isolation — application-layer bugs cannot leak data across accounts. Two PostgreSQL session functions are initialised at the start of every pool-client transaction via `public.set_app_context(userId, authenticatedUserId)`:
+
+```sql
+-- Returns the active profile being viewed (changes during family delegation)
+current_user_id()
+
+-- Returns the true logged-in actor (never changes during context switching)
+authenticated_user_id()
+```
+
+A minimal RLS policy looks like this:
+
+```sql
+ALTER TABLE food_diary ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY food_diary_user_policy ON food_diary
+  FOR ALL
+  USING (user_id = current_user_id());
+```
+
+More sensitive tables use `authenticated_user_id()` to prevent delegates from accessing data even when context-switched:
+
+```sql
+ALTER TABLE sparky_chat_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY chat_history_owner_only ON sparky_chat_history
+  FOR ALL
+  USING (user_id = authenticated_user_id());
+```
+
+All RLS policies are defined in `SparkyFitnessServer/db/rls_policies.sql`.
+
+<Warning>
+  Every new user-specific table **must** be added to `rls_policies.sql` and classified into one of the three security tiers before the PR is merged. See the cross-package rules in `AGENTS.md`.
+</Warning>
+
+## Database Security Tiers
+
+All tables are classified into one of three security tiers following the least-privilege principle.
+
+### Tier 1 — Strictly Private
+
+Only `authenticated_user_id()` (the true account owner) can read or write. Family delegates have zero access.
+
+<CardGroup cols={2}>
+  <Card title="Authentication & credentials" icon="lock">
+    `user`, `two_factor`, `verification`, `api_key`, `user_oidc_links`, `passkey`, `session`, `account`
+  </Card>
+  <Card title="Private logs & preferences" icon="eye-slash">
+    `sparky_chat_history`, `ai_service_settings`, `user_ignored_updates`, `admin_activity_logs`
+  </Card>
+  <Card title="Cycle & reproductive health" icon="heart">
+    `cycle_settings`, `cycle_daily_entries`, `cycles`, `cycle_test_entries`, `user_cycle_display_preferences`, `user_mood_display_preferences`
+  </Card>
+  <Card title="Pregnancy" icon="star">
+    `pregnancies`, `pregnancy_kick_sessions`, `pregnancy_contractions`, `pregnancy_photos`, `pregnancy_checklist_state`, `health_appointments`
+  </Card>
+</CardGroup>
+
+### Tier 2 — View-Only Shared
+
+Owner writes; switched delegates (context-switched via `current_user_id()`) can read. Used for profiles, layout settings, and custom food/exercise libraries.
+
+| Table | Readable by delegates with… |
+|---|---|
+| `profiles`, `user_preferences`, `user_dashboard_layouts` | Any active delegation |
+| `foods`, `food_variants`, `meals`, `meal_foods` | `can_view_food_library`, `can_manage_diary`, or `can_view_reports` |
+| `exercises`, `workout_presets`, `workout_preset_exercises` | `can_view_exercise_library`, `can_manage_diary`, or `can_view_reports` |
+| `external_data_providers` | `share_external_providers` |
+| `user_goals`, `weekly_goal_plans` | `can_manage_diary` or `can_view_reports` |
+| `family_access` | Owner or switched delegate |
+
+### Tier 3 — Delegate-Writable
+
+Caregivers and delegates with the appropriate permission can **read and write** on behalf of the owner. Organised into three sub-groups:
+
+<Accordion title="Diary logs — can_manage_diary / can_view_reports">
+  `food_entries`, `food_entry_meals`, `exercise_entries`, `exercise_preset_entries`, `exercise_entry_sets`, `exercise_entry_activity_details`, `water_intake`, `water_intake_entries`, `meal_plan_template_assignments`, `workout_plan_template_assignments`, `workout_plan_assignment_sets`
+</Accordion>
+
+<Accordion title="Medication & symptom logs — can_manage_medications / can_view_reports">
+  `medications`, `medication_schedules`, `medication_entries`, `medication_pens`, `injection_entries`, `medication_titration_steps`, `user_custom_symptoms`, `symptom_entries`, `user_custom_symptom_locations`
+</Accordion>
+
+<Accordion title="Check-in & wellness logs — can_manage_checkin / can_view_reports">
+  `check_in_measurements`, `check_in_photos`, `sleep_entries`, `sleep_entry_stages`, `sleep_need_calculations`, `daily_sleep_need`, `fasting_logs`, `mood_entries`, `day_classification_cache`, `custom_categories`, `custom_measurements`, `user_custom_moods`
+</Accordion>
+
+### System / Global Reference Tables
+
+These tables store global configuration and reference data. They carry **no RLS** because they contain no user-specific data. All authenticated users can read them; only admins can write.
+
+| Table | Description |
+|---|---|
+| `global_settings` | Application feature flags and system configuration |
+| `sso_provider` | Active SSO providers (Google, Apple, etc.) |
+| `oidc_providers` | OpenID Connect integration settings |
+| `external_provider_types` | Search-provider configuration lookup |
+| `medication_types` | Medication category lookup |
+| `backup_settings` | Automated backup timing and storage credentials (admin-only read) |
+
+## Migrations
+
+SparkyFitness uses a custom migration system that runs automatically on server startup.
+
+### How it works
+
+1. On startup the server reads the `migrations` table to determine the current schema version.
+2. Any migration files in `SparkyFitnessServer/db/migrations/` that have not yet been applied are executed in order.
+3. Each applied migration is recorded in the `migrations` table.
+4. Results are logged for debugging.
+
+### Migration file naming
+
+```
+YYYY_MM_DD_HH_MM_description.sql
+```
+
+Example: `2024_03_15_14_20_add_meal_planning.sql`
+
+### Creating a migration
+
+<Steps>
+  <Step title="Create the migration file">
+    ```bash
+    cd SparkyFitnessServer/db/migrations/
+    touch 2024_03_15_14_20_add_meal_planning.sql
+    ```
+  </Step>
+
+  <Step title="Write the migration SQL">
+    ```sql
+    -- Migration: Add meal planning functionality
+    -- Version: 2024_03_15_14_20
+
+    BEGIN;
+
+    CREATE TABLE meal_plans (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         VARCHAR(255) NOT NULL,
+      planned_date DATE NOT NULL,
+      total_calories DECIMAL(10,2),
+      created_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+      updated_at   TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+
+    -- Enable RLS
+    ALTER TABLE meal_plans ENABLE ROW LEVEL SECURITY;
+
+    -- Create RLS policy
+    CREATE POLICY meal_plans_user_policy ON meal_plans
+      FOR ALL USING (user_id = current_user_id());
+
+    -- Create indexes
+    CREATE INDEX idx_meal_plans_user_date ON meal_plans(user_id, planned_date);
+
+    -- Record the migration
+    INSERT INTO migrations (version, applied_at)
+    VALUES ('2024_03_15_14_20', NOW());
+
+    COMMIT;
+    ```
+  </Step>
+
+  <Step title="Add RLS policies">
+    Add the new table's policies to `SparkyFitnessServer/db/rls_policies.sql` and classify it into the appropriate security tier.
+  </Step>
+
+  <Step title="Update the schema snapshot">
+    Sync the change to the repo-root schema backup:
+
+    ```bash
+    # From repo root
+    pg_dump --schema-only sparkyfitness > db_schema_backup.sql
+    ```
+  </Step>
+</Steps>
+
+### Migration best practices
+
+- **Always wrap in a transaction** — if any statement fails, the entire migration rolls back.
+- **Add columns with defaults** so existing rows are valid immediately.
+- **Use `CREATE INDEX CONCURRENTLY`** (outside a transaction) to avoid locking the table.
+- **Document rollback steps** in migration comments.
+- **Test on development data** before applying to production.
+
+```sql
+-- Safe column addition example
+ALTER TABLE food_diary ADD COLUMN notes TEXT DEFAULT NULL;
+
+-- Concurrent index creation (run outside BEGIN/COMMIT)
+CREATE INDEX CONCURRENTLY idx_food_diary_user_date
+ON food_diary(user_id, consumed_at);
+```
+
+## Connection Configuration
+
+SparkyFitness uses two database roles:
+
+| Role | Variable | Purpose |
+|---|---|---|
+| Admin user | `POSTGRES_USER` / `DB_USER` | Runs migrations and manages schema |
+| App user | `SPARKY_FITNESS_APP_DB_USER` | Runtime queries — limited privileges |
+
+The principle of least privilege means the app user cannot perform DDL operations. Migrations always run as the admin role on startup before the app user takes over.
+
+## Backup and Restore
+
+<Note>
+  For instructions on taking backups and restoring the database, see the **Backup and Restore** page in the Administration section of this documentation.
+</Note>
+
+Quick reference for checking migration state:
+
+```sql
+-- List all applied migrations
+SELECT * FROM migrations ORDER BY applied_at;
+
+-- Inspect RLS policies on a table
+SELECT * FROM pg_policies WHERE tablename = 'food_diary';
+
+-- Check indexes on a table
+SELECT indexname, indexdef
+FROM pg_indexes
+WHERE tablename = 'food_diary';
+```

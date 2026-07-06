@@ -1,0 +1,198 @@
+---
+title: "Configure Authentication in SparkyFitness"
+sidebarTitle: "Authentication"
+description: "Set up email/password login, OpenID Connect (OIDC) SSO, TOTP two-factor authentication, Passkeys, and multi-factor authentication in SparkyFitness."
+---
+
+SparkyFitness supports a flexible suite of authentication methods — email/password login, OpenID Connect (OIDC) single sign-on, TOTP-based two-factor authentication, and Passkeys — so you can match the security model of your organisation or home lab. Most settings are controlled through a combination of environment variables (for server-side enforcement) and the in-app **Admin → Authentication Settings** panel (for day-to-day configuration).
+
+---
+
+## Email/Password Login
+
+By default, email/password login is enabled. Two environment variables let you control this behaviour.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `SPARKY_FITNESS_DISABLE_EMAIL_LOGIN` | `false` | Set to `true` to hide the email/password form on the login page. Typically used when OIDC is your only login method. |
+| `SPARKY_FITNESS_FORCE_EMAIL_LOGIN` | `true` | **Failsafe.** When `true`, email/password login is always available regardless of in-app settings. Prevents lockout if OIDC is misconfigured. |
+
+<Warning>
+  `SPARKY_FITNESS_FORCE_EMAIL_LOGIN` overrides `SPARKY_FITNESS_DISABLE_EMAIL_LOGIN`. If you want to fully disable email login, you must set both `SPARKY_FITNESS_DISABLE_EMAIL_LOGIN=true` **and** `SPARKY_FITNESS_FORCE_EMAIL_LOGIN=false`. Only do this after you have confirmed that your OIDC provider is working correctly.
+</Warning>
+
+```bash
+# .env — disable email login once OIDC is confirmed working
+SPARKY_FITNESS_DISABLE_EMAIL_LOGIN=true
+SPARKY_FITNESS_FORCE_EMAIL_LOGIN=false
+```
+
+---
+
+## OpenID Connect (OIDC)
+
+SparkyFitness uses the `openid-client` library to support any standards-compliant OIDC Identity Provider (IdP) — Authentik, Authelia, Keycloak, Google, GitHub, Okta, and others. OIDC providers are stored in the database and managed through **Admin → Authentication Settings** in the app UI. You can configure multiple providers simultaneously.
+
+You can also bootstrap a provider entirely through environment variables, which is convenient for declarative/GitOps deployments.
+
+### Configure via the Admin UI
+
+<Steps>
+  <Step title="Open Authentication Settings">
+    Log in as an admin and navigate to **Admin → Authentication Settings → OIDC Providers → Add Provider**.
+  </Step>
+
+  <Step title="Enter the Issuer URL">
+    Paste the Issuer URL provided by your IdP (e.g. `https://accounts.google.com` or `https://auth.example.com/application/o/my-app/`). SparkyFitness appends `/.well-known/openid-configuration` to discover endpoints automatically.
+  </Step>
+
+  <Step title="Enter the Client ID and Client Secret">
+    Copy these values from your IdP's application/client registration page. The Client Secret is stored encrypted and is masked in the admin UI after it is saved.
+  </Step>
+
+  <Step title="Set the Scope">
+    Use `openid profile email`. Other scopes have not been tested and may not work correctly.
+  </Step>
+
+  <Step title="Copy the Redirect URI">
+    The application generates a Redirect URI for you — copy it directly from the admin form and register it **exactly** in your IdP. Do not edit the URI manually.
+  </Step>
+
+  <Step title="Configure optional settings">
+    - **Auto-Register Users** — when enabled, a new SparkyFitness account is created automatically on the user's first successful OIDC login.
+    - **Enable Email/Password Login** — controls whether the traditional login form is shown alongside the OIDC button (can also be controlled globally via `SPARKY_FITNESS_DISABLE_EMAIL_LOGIN`).
+  </Step>
+
+  <Step title="Save and test">
+    Save the provider, then open a private/incognito window and attempt to sign in using the new OIDC button to confirm the flow works end-to-end before disabling email login.
+  </Step>
+</Steps>
+
+### Configure via Environment Variables
+
+When the variables below are all set, SparkyFitness upserts an OIDC provider record at startup. This is equivalent to configuring a provider through the UI and is useful for Docker Compose or Kubernetes deployments where you want the configuration in your `docker-compose.yml` or a secrets manager.
+
+```bash
+# .env — OIDC provider bootstrapped from environment
+SPARKY_FITNESS_OIDC_AUTH_ENABLED=true
+SPARKY_FITNESS_OIDC_ISSUER_URL=https://auth.example.com/application/o/sparkyfitness/
+SPARKY_FITNESS_OIDC_CLIENT_ID=your-client-id
+SPARKY_FITNESS_OIDC_CLIENT_SECRET=your-client-secret
+SPARKY_FITNESS_OIDC_PROVIDER_SLUG=authentik          # URL-safe identifier
+SPARKY_FITNESS_OIDC_PROVIDER_NAME=Authentik           # Display name on the login button
+SPARKY_FITNESS_OIDC_SCOPE=openid email profile
+SPARKY_FITNESS_OIDC_AUTO_REGISTER=true
+SPARKY_FITNESS_OIDC_LOGO_URL=https://example.com/authentik-logo.png  # optional
+SPARKY_FITNESS_OIDC_AUTO_REDIRECT=true               # auto-redirect when email login is disabled
+SPARKY_FITNESS_OIDC_ADMIN_GROUP=Admin                # IdP group claim value that maps to SparkyFitness admin role
+```
+
+### OIDC Authentication Flow
+
+Understanding the flow helps diagnose problems:
+
+1. The user clicks the **Sign in with \<Provider\>** button.
+2. SparkyFitness redirects the user's browser to the IdP's authorisation endpoint.
+3. The user authenticates with the IdP (and completes any MFA the IdP requires).
+4. The IdP redirects back to the SparkyFitness `oidc-callback` endpoint with a short-lived authorisation code.
+5. SparkyFitness exchanges the code for an ID Token and Access Token at the IdP's token endpoint.
+6. User identity is extracted from the ID Token and/or the UserInfo endpoint.
+7. If Auto-Register is enabled and the user is new, a SparkyFitness account is created. Otherwise, the existing account is linked and the session is established.
+
+### Advanced Settings
+
+<Accordion title="Token Endpoint Auth Method, Algorithms, and Timeout">
+  These settings are tested with their default values. Customising them is possible but not officially validated.
+
+  | Variable | Default | Description |
+  |---|---|---|
+  | `SPARKY_FITNESS_OIDC_TOKEN_AUTH_METHOD` | `client_secret_post` | Method used to authenticate the app with the IdP token endpoint. |
+  | `SPARKY_FITNESS_OIDC_ID_TOKEN_SIGNED_ALG` | `RS256` | Algorithm expected for ID Token signatures. |
+  | `SPARKY_FITNESS_OIDC_USERINFO_SIGNED_ALG` | `none` | Algorithm expected for UserInfo endpoint signatures. |
+  | `SPARKY_FITNESS_OIDC_TIMEOUT` | `30000` | Request timeout in milliseconds. Increase if your IdP is slow to respond. |
+
+  ```bash
+  # .env — example advanced overrides
+  SPARKY_FITNESS_OIDC_TOKEN_AUTH_METHOD=client_secret_post
+  SPARKY_FITNESS_OIDC_ID_TOKEN_SIGNED_ALG=RS256
+  SPARKY_FITNESS_OIDC_USERINFO_SIGNED_ALG=none
+  SPARKY_FITNESS_OIDC_TIMEOUT=30000
+  ```
+</Accordion>
+
+### Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Invalid Redirect URI">
+    The Redirect URI in SparkyFitness **must exactly match** the URI registered in your IdP — including the scheme (`https://`), domain, port (if non-standard), and path. Copy it directly from the admin form rather than typing it manually.
+  </Accordion>
+
+  <Accordion title="Incorrect Client ID or Secret">
+    Double-check the values against your IdP's application settings. Note that the secret is masked as `*****` in the admin UI after saving; re-enter it if you suspect it was saved incorrectly.
+  </Accordion>
+
+  <Accordion title="Issuer URL not reachable">
+    The SparkyFitness **server** (not your browser) makes the discovery request to `<issuer>/.well-known/openid-configuration`. Ensure the URL is reachable from within your Docker network or server host, not just from your browser. Check with `curl` from inside the container if needed.
+  </Accordion>
+
+  <Accordion title="Signature or algorithm mismatch errors">
+    If you see errors like *invalid signature* or *algorithm mismatch*, verify that `SPARKY_FITNESS_OIDC_ID_TOKEN_SIGNED_ALG` and `SPARKY_FITNESS_OIDC_USERINFO_SIGNED_ALG` match what your IdP actually sends. Check your IdP's application settings or its discovery document (`/.well-known/openid-configuration`) for the `id_token_signing_alg_values_supported` field.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Two-Factor Authentication (TOTP)
+
+SparkyFitness supports TOTP-based two-factor authentication (compatible with any authenticator app such as Google Authenticator, Aegis, or Bitwarden Authenticator). Users can enable TOTP from their account security settings.
+
+<Warning>
+  **`BETTER_AUTH_SECRET` must never change after users have enabled 2FA.** This secret is used to encrypt TOTP data stored in the database. If you change it, the server can no longer decrypt existing 2FA records and **all users who have enabled TOTP will be locked out of their accounts**. Set it to a strong, persistent value during initial setup.
+
+  If you absolutely must rotate the secret, all users must **disable TOTP first**. You can generate a suitable value with:
+
+  ```bash
+  openssl rand -hex 32
+  ```
+</Warning>
+
+```bash
+# .env — set once and never change
+BETTER_AUTH_SECRET=changeme_replace_with_a_strong_better_auth_secret
+```
+
+`BETTER_AUTH_SECRET` is also used to sign user sessions, so it should be a long random string regardless of whether 2FA is in use.
+
+---
+
+## Passkeys
+
+SparkyFitness supports WebAuthn Passkeys (FIDO2) as an authentication method. Users can register passkeys from their account security settings. Passkeys require HTTPS — ensure your instance is served over a secure connection (see the [Reverse Proxy guide](/administration/reverse-proxy)).
+
+---
+
+## Admin Access
+
+The `SPARKY_FITNESS_ADMIN_EMAIL` environment variable lets you designate an admin user by email address. On each server startup, if a user with this email exists, they are automatically granted admin privileges.
+
+```bash
+# .env
+SPARKY_FITNESS_ADMIN_EMAIL=admin@example.com
+```
+
+<Note>
+  This variable is optional. If it is not set, no automatic admin promotion occurs. For your initial setup, set it to the email address you registered with so you can access **Admin → Authentication Settings** to configure OIDC and other options.
+</Note>
+
+---
+
+## Signup Control
+
+To prevent new users from self-registering (for example, after you have set up all accounts for your household), set:
+
+```bash
+# .env
+SPARKY_FITNESS_DISABLE_SIGNUP=true
+```
+
+When signup is disabled, the registration page is hidden and any attempt to create an account via the API is rejected. Existing users and OIDC auto-registration (if enabled) are not affected.

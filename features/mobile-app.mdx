@@ -1,0 +1,190 @@
+---
+title: "SparkyFitness Mobile Apps for iOS and Android"
+sidebarTitle: "Mobile App"
+description: "Download and configure the SparkyFitness iOS and Android apps to sync Apple Health and Google Health Connect data with your self-hosted server."
+---
+
+The SparkyFitness native mobile apps for iOS and Android bring your self-hosted fitness tracker to your phone, providing Apple Health and Google Health Connect synchronisation so that steps, workouts, sleep, vitals, and other health metrics recorded on your device flow automatically into your SparkyFitness diary and check-in logs. Both apps connect directly to your own server — no third-party cloud intermediary ever touches your data.
+
+<Warning>
+  The SparkyFitness mobile apps require **HTTPS**. An HTTP-only deployment will not work. You must configure a reverse proxy with a valid TLS certificate before connecting the mobile app to your server. Self-signed certificates are supported but are not actively tested on every release. See the [Proxy / HTTPS Setup](#proxy-https-setup) section below for details.
+</Warning>
+
+## iOS App
+
+The iOS app is available on the **App Store** and through the **TestFlight** beta programme.
+
+<CardGroup cols={2}>
+  <Card title="Download on the App Store" icon="apple" href="https://apps.apple.com/us/app/sparkyfitness/id6757314392">
+    The stable release of SparkyFitness for iPhone and iPad.
+  </Card>
+  <Card title="Join TestFlight Beta" icon="flask" href="https://testflight.apple.com/join/9Yz8PzpR">
+    Get early access to new features and updates via Apple TestFlight.
+  </Card>
+</CardGroup>
+
+### Apple Health Integration
+
+The iOS app reads data from **Apple Health** (HealthKit) and syncs it to your self-hosted server. The following metrics are supported on iOS:
+
+| Category | Metrics |
+|:---|:---|
+| **Common** | Steps, Active Calories, Total Calories, Heart Rate, Weight, Sleep Session, Distance, Exercise Session |
+| **Vitals** | Blood Pressure, Basal Body Temperature, Blood Glucose, Body Temperature, Resting Heart Rate, Heart Rate Variability (SDNN), Respiratory Rate, Blood Oxygen Saturation, Blood Alcohol Content |
+| **Body Measurements** | Body Fat %, Basal Metabolic Rate, Lean Body Mass, Height, Bone Mass, VO2 Max |
+| **Nutrition** | Nutrition (calories + macros), Hydration |
+| **Reproductive** | Menstruation Flow, Menstruation Period, Ovulation Test, Cervical Mucus, Intermenstrual Bleeding |
+| **Mobility** | Walking Speed, Walking Step Length, Walking Asymmetry %, Walking Double Support % |
+| **Running** | Running Speed, Running Power, Running Stride Length, Running Ground Contact Time, Running Vertical Oscillation |
+| **Cycling** | Cycling Speed, Cycling Power, Cycling Cadence, Cycling Functional Threshold Power |
+| **Apple Activity Rings** | Apple Move Time, Apple Exercise Time, Apple Stand Time |
+
+The app also supports **writeback** from SparkyFitness back to Apple Health for Nutrition and Hydration records, so food you log in the diary can appear in the Health app.
+
+### Requirements
+
+- iPhone or iPad running a supported version of iOS
+- Apple Health enabled on the device
+- Self-hosted SparkyFitness server accessible over **HTTPS**
+
+### Connecting to Your Server
+
+<Steps>
+  <Step title="Open the SparkyFitness app">
+    Launch the app after installing it from the App Store or TestFlight.
+  </Step>
+  <Step title="Navigate to Settings">
+    Tap the **Settings** icon within the app.
+  </Step>
+  <Step title="Add or edit your server">
+    Tap your server entry to edit it, or tap the **+** button to add a new one. Enter your server's HTTPS URL (for example, `https://sparky.yourdomain.com`).
+  </Step>
+  <Step title="Grant Health permissions">
+    The app will request permission to read the health metrics you want to sync. Approve the metrics in the iOS Health permissions sheet.
+  </Step>
+</Steps>
+
+## Android App
+
+The Android app is available as a direct APK download and through a **Google Play closed beta**.
+
+<CardGroup cols={2}>
+  <Card title="Download APK from GitHub" icon="github" href="https://github.com/CodeWithCJ/SparkyFitness/releases">
+    Download the latest `SparkyFitnessMobile.apk` from the GitHub Releases page and sideload it on your device.
+  </Card>
+  <Card title="Google Play Beta" icon="android" href="https://play.google.com/store/apps/details?id=com.SparkyApps.SparkyFitnessMobile">
+    Join the closed beta via the Google Play beta group first, then install from the Play Store.
+  </Card>
+</CardGroup>
+
+<Note>
+  To join the Google Play beta, first join the [Google Groups beta programme](https://groups.google.com/g/sparkyfitness) and then access the Play Store listing.
+</Note>
+
+### Google Health Connect Integration
+
+The Android app reads data from **Google Health Connect** and syncs it to your self-hosted server. The following metrics are supported on Android:
+
+| Category | Metrics |
+|:---|:---|
+| **Common** | Steps, Active Calories, Total Calories, Heart Rate, Weight, Sleep Session, Distance, Exercise Session |
+| **Vitals** | Blood Pressure, Basal Body Temperature, Blood Glucose, Body Temperature, Resting Heart Rate, Heart Rate Variability (RMSSD), Respiratory Rate, Blood Oxygen Saturation |
+| **Body Measurements** | Body Fat %, Basal Metabolic Rate, Lean Body Mass, Height, Bone Mass, VO2 Max |
+| **Nutrition** | Nutrition (calories + macros), Hydration |
+| **Reproductive** | Menstruation Period, Ovulation Test, Cervical Mucus, Intermenstrual Bleeding |
+| **Activity** | Floors Climbed, Speed, Power, Elevation Gained, Steps Cadence, Cycling Pedaling Cadence, Wheelchair Pushes |
+
+The app also supports **writeback** to Health Connect for Nutrition and Hydration records.
+
+### Requirements
+
+- Android device with **Google Health Connect** installed (available from the Google Play Store)
+- SparkyFitness server accessible over **HTTPS**
+
+### Connecting to Your Server
+
+<Steps>
+  <Step title="Install and open the app">
+    Install the APK or the Play Store beta build and open the SparkyFitness app.
+  </Step>
+  <Step title="Open Settings in the app">
+    Tap the **Settings** icon.
+  </Step>
+  <Step title="Add your server URL">
+    Tap your server entry or the **+** button to add a new server. Enter your HTTPS server URL.
+  </Step>
+  <Step title="Grant Health Connect permissions">
+    The app will request read permissions for the health metrics you want to sync. Approve the requested permissions in the Health Connect permissions screen.
+  </Step>
+</Steps>
+
+## Proxy / HTTPS Setup
+
+Because Apple and Google both require HTTPS for apps that communicate with remote servers, your self-hosted SparkyFitness instance must be served over TLS before the mobile app can connect to it.
+
+<Note>
+  Self-signed certificates are supported in the mobile apps, but they are not actively tested on every release. For the most reliable experience, use a certificate from a public CA (e.g. Let's Encrypt via a reverse proxy).
+</Note>
+
+Common approaches for adding HTTPS to a self-hosted SparkyFitness deployment include placing it behind **Nginx**, **Caddy**, **Traefik**, or a tunnel service such as **Cloudflare Tunnel** or **Pangolin**.
+
+### Proxy Tunnel Headers (Pangolin example)
+
+Some proxy tunnels require a special authentication header to be sent with every request. The SparkyFitness mobile app supports custom headers for this purpose.
+
+<Steps>
+  <Step title="Get your share token from Pangolin">
+    Open your Pangolin dashboard, click **Links** in the sidebar, and click **Create Share Link**. Choose your resource, enter a title and expiration date, then click **Create Link**. Under the QR code, click **Usage Examples** to see the header name and value — copy these down.
+  </Step>
+  <Step title="Open the server settings in the app">
+    In the SparkyFitness app, navigate to the Settings screen and tap on your server entry (or add a new one).
+  </Step>
+  <Step title="Enter the header information">
+    Enter the header name and value that you copied from Pangolin. If you need to add more than one header, tap the **+** button to add additional fields.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Getting a Diagnostic Report
+
+If you encounter issues with the mobile app, the built-in **Diagnostic Report** tool is the fastest way to collect information for debugging.
+
+<Steps>
+  <Step title="Open Settings in the app">
+    Tap the Settings icon and scroll all the way to the bottom of the settings screen.
+  </Step>
+  <Step title="Tap Diagnostic Report">
+    Find and tap the **Diagnostic Report** option. The app generates a report containing logs, configuration details, and system information.
+  </Step>
+  <Step title="Share the report">
+    Save the report to your device or share it directly with the developers via Discord or as an attachment on a GitHub issue.
+  </Step>
+</Steps>
+
+<Note>
+  The diagnostic report contains no personal data. All health, food, and exercise data is excluded.
+</Note>
+
+### Common Issues
+
+<Accordion title="Cannot connect to server">
+  - Confirm your server URL starts with `https://` — HTTP is not supported.
+  - Check that your TLS certificate is valid and not expired.
+  - If you are using a self-signed certificate, ensure the app has been configured to trust it (behaviour varies by OS version).
+  - If using a proxy tunnel, verify the tunnel is active and that any required headers are correctly entered in the app's server settings.
+</Accordion>
+
+<Accordion title="Health data is not syncing">
+  - Open the app's Settings and verify that the individual metrics you want to sync are enabled.
+  - Confirm that the required permissions have been granted in the iOS Health app or Android Health Connect settings.
+  - For background sync, ensure the app has background refresh / background data permissions at the OS level.
+  - Check the Diagnostic Report for specific error messages that may identify which metric or permission is causing the issue.
+</Accordion>
+
+<Accordion title="Certificate errors">
+  - Certificate errors typically indicate that the server's TLS certificate cannot be verified by the device.
+  - Ensure your certificate is issued by a trusted Certificate Authority or, if using Let's Encrypt, that the chain is complete.
+  - Self-signed certificates are accepted by the app but may require additional OS-level trust configuration on some devices.
+  - If the error persists, generate a Diagnostic Report and share it with the community on Discord for further help.
+</Accordion>

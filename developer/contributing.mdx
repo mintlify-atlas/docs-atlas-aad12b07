@@ -1,0 +1,359 @@
+---
+title: "Contributing to SparkyFitness Development"
+sidebarTitle: "Contributing"
+description: "Learn how to contribute code, fix bugs, and submit pull requests to SparkyFitness. Covers coding standards, commit conventions, and the review process."
+---
+
+SparkyFitness is an open-source, privacy-first fitness platform and warmly welcomes contributions from the community. Whether you want to squash a bug, build a new feature, improve documentation, or translate the UI into a new language, every contribution makes SparkyFitness better for families everywhere. This guide explains how to get involved and what the project asks of contributors.
+
+## Ways to Contribute
+
+<CardGroup cols={2}>
+  <Card title="Bug reports" icon="bug">
+    Open a GitHub issue with steps to reproduce, expected vs. actual behaviour, environment details, and screenshots for visual bugs.
+  </Card>
+  <Card title="Feature requests" icon="lightbulb">
+    Open a GitHub issue to discuss the idea **before writing any code**. Maintainers will confirm alignment with the project roadmap.
+  </Card>
+  <Card title="Code pull requests" icon="code">
+    Fork the repo, create a feature branch, follow the coding standards below, and open a PR with the required checklist completed.
+  </Card>
+  <Card title="Documentation" icon="book">
+    Fix inaccuracies, add examples, or document undocumented behaviour. Docs live in the `docs/` Nuxt / Docus site.
+  </Card>
+  <Card title="Translations" icon="language">
+    Only update the English (`en`) translation file in the main repo. Non-English translations are maintained in the separate [SparkyFitnessTranslations](https://github.com/CodeWithCJ/SparkyFitnessTranslations) repository via Weblate.
+  </Card>
+  <Card title="Code quality" icon="wrench">
+    Refactoring, performance improvements, security fixes, and dependency updates are all welcome.
+  </Card>
+</CardGroup>
+
+<Note>
+  The `AGENTS.md` file at the repository root contains special instructions for AI coding assistants (such as GitHub Copilot, Claude, and similar tools). If you are using an AI assistant to help write code for SparkyFitness, make sure your assistant has read `AGENTS.md` — it defines cross-package rules, migration requirements, shared utilities to prefer, and common command entrypoints. Package-level `AGENTS.md` / `CLAUDE.md` files in `SparkyFitnessFrontend/`, `SparkyFitnessServer/`, and `SparkyFitnessMobile/` take precedence over the root file for work inside those packages.
+</Note>
+
+## Development Setup
+
+Follow the [Dev Environment guide](/developer/getting-started) to get the full stack running locally. The short version:
+
+```bash
+git clone https://github.com/CodeWithCJ/SparkyFitness.git
+cd SparkyFitness
+cp docker/.env.example .env
+# Generate encryption key
+sed "s/SPARKY_FITNESS_API_ENCRYPTION_KEY=changeme_replace_with_a_64_character_hex_string/SPARKY_FITNESS_API_ENCRYPTION_KEY=$(openssl rand -hex 32)/" \
+  .env > .env.tmp && mv .env.tmp .env
+./docker/docker-helper.sh dev up
+```
+
+## Development Workflow
+
+<Steps>
+  <Step title="Fork and clone">
+    Fork the repository on GitHub, then clone your fork:
+
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/SparkyFitness.git
+    cd SparkyFitness
+    git remote add upstream https://github.com/CodeWithCJ/SparkyFitness.git
+    ```
+  </Step>
+
+  <Step title="Create a feature branch">
+    Always branch from `main`:
+
+    ```bash
+    git checkout main
+    git pull upstream main
+    git checkout -b feature/your-feature-name
+    # or: fix/login-validation, docs/update-setup-guide
+    ```
+  </Step>
+
+  <Step title="Make changes and test">
+    Follow the coding standards below. Test your changes thoroughly — happy path, error cases, and edge cases.
+  </Step>
+
+  <Step title="Run quality checks">
+    ```bash
+    # Frontend
+    cd SparkyFitnessFrontend && pnpm run validate
+
+    # Backend
+    cd SparkyFitnessServer && pnpm run typecheck && pnpm run lint && pnpm run test
+
+    # Mobile (if applicable)
+    cd SparkyFitnessMobile && pnpm run lint && pnpm run test:run -- --watchman=false --runInBand
+    ```
+  </Step>
+
+  <Step title="Commit your changes">
+    ```bash
+    git add .
+    git commit -m "feat: add exercise tracking functionality"
+    ```
+
+    Use a short, descriptive commit message with a conventional prefix (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+  </Step>
+
+  <Step title="Open a pull request">
+    Push your branch and open a PR on GitHub. Fill out the PR template completely — the automated validation workflow checks that all required boxes are ticked.
+  </Step>
+</Steps>
+
+## Coding Standards
+
+### General principles
+
+- **Clean, readable code** — prefer self-documenting names; add comments for non-obvious logic.
+- **DRY** — avoid duplication; extract shared logic into utilities or helpers.
+- **Separation of concerns** — keep routing, business logic, and data access in their respective layers.
+- **No `any`** — use TypeScript strictly; define interfaces and types explicitly.
+
+### Frontend (React + TypeScript)
+
+<Accordion title="Component structure">
+  ```typescript
+  // Use functional components with hooks
+  const ExampleComponent: React.FC<ExampleProps> = ({ prop1, prop2 }) => {
+    // 1. Hooks at the top
+    const [state, setState] = useState<StateType>('');
+    const { data, isLoading } = useExampleData();
+
+    // 2. Event handlers
+    const handleSubmit = useCallback((e: React.FormEvent) => {
+      e.preventDefault();
+      // handle submission
+    }, []);
+
+    // 3. Early returns for loading/error states
+    if (isLoading) return <LoadingSpinner />;
+
+    return (
+      <div className="component-container">
+        {/* JSX */}
+      </div>
+    );
+  };
+  ```
+</Accordion>
+
+<Accordion title="Styling conventions">
+  - Use **Tailwind CSS** utility classes for all styling.
+  - Prefer **shadcn/ui** components over custom implementations.
+  - Always add responsive classes (`sm:`, `md:`, `lg:`).
+  - Support both light and dark themes.
+</Accordion>
+
+<Accordion title="Data fetching with TanStack Query">
+  Follow the established pattern — API functions and query keys live in `src/api/`, custom hooks wrapping `useQuery` / `useMutation` live in `src/hooks/`:
+
+  ```typescript
+  // src/api/exampleApi.ts
+  export const exampleKeys = {
+    all: ['examples'] as const,
+    detail: (id: string) => [...exampleKeys.all, id] as const,
+  };
+
+  export const getExamples = () => api.get('/examples');
+
+  // src/hooks/useExamples.ts
+  export const useExamples = () =>
+    useQuery({ queryKey: exampleKeys.all, queryFn: getExamples });
+  ```
+</Accordion>
+
+### Backend (Node.js + Express)
+
+<Accordion title="TypeScript first">
+  - All **new** backend files must be written in TypeScript.
+  - Existing JavaScript files may remain as-is, but conversion is encouraged when adding significant functionality.
+  - Enable strict mode; avoid `any`.
+</Accordion>
+
+<Accordion title="Zod schema validation">
+  All new API endpoints must define Zod schemas for request validation:
+
+  ```typescript
+  import { z } from 'zod';
+
+  const createFoodEntrySchema = z.object({
+    foodItemId: z.string().uuid(),
+    quantity:   z.number().positive(),
+    unit:       z.string().min(1),
+    mealType:   z.enum(['breakfast', 'lunch', 'dinner', 'snack']),
+    consumedAt: z.string().datetime(),
+  });
+
+  router.post('/food-entries', async (req, res) => {
+    const validated = createFoodEntrySchema.parse(req.body);
+    // ...
+  });
+  ```
+</Accordion>
+
+<Accordion title="Repository pattern">
+  All database operations must use the repository pattern with explicit transaction management:
+
+  ```typescript
+  const foodEntryRepository = {
+    async create(data: CreateFoodEntryInput) {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        // parameterised queries only — never string interpolation
+        const result = await client.query(
+          'INSERT INTO food_entries(user_id, food_item_id, quantity) VALUES($1,$2,$3) RETURNING *',
+          [data.userId, data.foodItemId, data.quantity]
+        );
+        await client.query('COMMIT');
+        return result.rows[0];
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+  };
+  ```
+</Accordion>
+
+<Accordion title="Automated tests required for new endpoints">
+  Every new API endpoint needs tests covering at least:
+  - Happy path (valid input, expected response)
+  - Validation errors (malformed input)
+  - Authentication / authorisation failures
+  - Edge cases
+</Accordion>
+
+### Database standards
+
+- All schema changes must go through a migration file in `SparkyFitnessServer/db/migrations/`.
+- Every new user-specific table must have RLS policies added to `SparkyFitnessServer/db/rls_policies.sql`.
+- Classify new tables into **Tier 1**, **Tier 2**, or **Tier 3** in the [database security documentation](/developer/database).
+- Wrap all migrations in a `BEGIN` / `COMMIT` transaction.
+- Use `DECIMAL(10,2)` for nutritional values; UUID for all primary keys.
+
+## Project Structure
+
+Understanding where to add code:
+
+| What you're adding | Where it goes |
+|---|---|
+| New API route | `SparkyFitnessServer/routes/<feature>.ts` |
+| Database queries | `SparkyFitnessServer/models/<feature>Repository.ts` |
+| Business logic | `SparkyFitnessServer/services/<feature>Service.ts` |
+| Request validation schema | `SparkyFitnessServer/schemas/<feature>.ts` |
+| New device/service integration | `SparkyFitnessServer/integrations/<provider>/` |
+| Frontend page | `SparkyFitnessFrontend/src/pages/<FeaturePage>.tsx` |
+| Reusable UI component | `SparkyFitnessFrontend/src/components/<Feature>/` |
+| API function + query key | `SparkyFitnessFrontend/src/api/<feature>Api.ts` |
+| Custom hook | `SparkyFitnessFrontend/src/hooks/use<Feature>.ts` |
+| Shared types / schemas | `shared/src/schemas/` or `shared/src/constants/` |
+
+## Adding a New Integration
+
+SparkyFitness already integrates with services such as FatSecret, Nutritionix, OpenFoodFacts, Strava, Withings, Garmin Connect, Hevy, Polar, and more. Each integration lives in its own directory under `SparkyFitnessServer/integrations/<provider>/`.
+
+To add a new device or data-provider integration:
+
+<Steps>
+  <Step title="Create the integration directory">
+    ```bash
+    mkdir SparkyFitnessServer/integrations/myprovider
+    ```
+  </Step>
+
+  <Step title="Implement the integration module">
+    Follow the structure of an existing integration. At minimum, export:
+    - An authentication / OAuth flow handler
+    - A data-fetch function that maps provider data to SparkyFitness types
+    - A Zod schema for the provider's API response
+  </Step>
+
+  <Step title="Add a route">
+    Register the integration's endpoints in a new route file and mount it in the main Express app.
+  </Step>
+
+  <Step title="Store credentials securely">
+    Save OAuth tokens or API keys in `external_data_providers` (a **Tier 2** table — owner writes, delegates with `share_external_providers` can read). Encrypt all secrets using the `SPARKY_FITNESS_API_ENCRYPTION_KEY`.
+  </Step>
+
+  <Step title="Write tests">
+    Mock the external HTTP calls and test the happy path plus error handling.
+  </Step>
+</Steps>
+
+## Translations
+
+SparkyFitness uses `i18next` and `react-i18next` for internationalisation. Translation files are stored under `SparkyFitnessFrontend/public/locales/{{languageCode}}/translation.json`.
+
+<Note>
+  **Only update the English (`en`) translation file** in the main repository. Non-English translation files are maintained in the separate [SparkyFitnessTranslations](https://github.com/CodeWithCJ/SparkyFitnessTranslations) repository via Weblate. Do not modify non-English files in this repo.
+</Note>
+
+When adding new UI strings:
+
+1. Add the key and English string to `public/locales/en/translation.json`.
+2. Use the `useTranslation` hook in your component:
+
+   ```typescript
+   import { useTranslation } from 'react-i18next';
+
+   const MyComponent = () => {
+     const { t } = useTranslation();
+     return <h1>{t('myFeature.title', { defaultValue: 'My Feature' })}</h1>;
+   };
+   ```
+
+3. Add a hardcoded fallback value directly in the code so the UI remains usable even if the translation file hasn't loaded.
+
+To add a new language (e.g. Spanish — `es`):
+1. Create `public/locales/es/translation.json`.
+2. Add `'es'` to `supportedLngs` in `SparkyFitnessFrontend/src/i18n.ts`.
+3. Add a `<SelectItem>` for Spanish in the language switcher in `Settings.tsx`.
+
+## Pull Request Checklist
+
+Before submitting your PR, verify:
+
+- [ ] Branch is up to date with the latest `main`
+- [ ] Changes have been tested thoroughly
+- [ ] Code follows project conventions and standards
+- [ ] No new console errors or warnings
+- [ ] Mobile responsiveness verified for any UI changes
+- [ ] Database migrations included if schema changed
+- [ ] New tables added to RLS policies and classified in security docs
+- [ ] English translation keys updated if new UI strings added
+- [ ] Before/after screenshots attached for UI changes
+- [ ] **Frontend**: `pnpm run validate` passes in `SparkyFitnessFrontend/`
+- [ ] **Backend**: `pnpm run typecheck && pnpm run lint && pnpm run test` passes in `SparkyFitnessServer/`
+- [ ] **Backend new files**: Written in TypeScript with Zod schemas and tests
+
+### Automated PR validation
+
+A GitHub Actions workflow runs automatically on every PR and:
+
+1. Detects which packages changed (frontend, backend, mobile, UI).
+2. Validates that the appropriate checkboxes in the PR template are checked.
+3. Posts a comment with validation results and guidance.
+4. **Fails the PR check** if required checkboxes are missing or unchecked.
+
+<Warning>
+  Do **not** remove checkboxes from the PR template. The validation workflow checks for their presence and the PR will fail if they are missing.
+</Warning>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="GitHub Issues" icon="github">
+    Use [GitHub Issues](https://github.com/CodeWithCJ/SparkyFitness/issues) to report bugs or ask technical questions. Search existing issues before opening a new one.
+  </Card>
+  <Card title="GitHub Discussions" icon="comments">
+    Use [GitHub Discussions](https://github.com/CodeWithCJ/SparkyFitness/discussions) for general questions, ideas, and community conversation.
+  </Card>
+</CardGroup>
+
+For complex architectural questions or significant feature proposals, tag a maintainer in the issue so they can weigh in before you invest time in implementation.

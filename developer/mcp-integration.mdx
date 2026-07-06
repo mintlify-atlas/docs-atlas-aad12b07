@@ -1,0 +1,233 @@
+---
+title: "Integrate AI Clients via the MCP Server Protocol"
+sidebarTitle: "MCP Integration"
+description: "Connect Claude Desktop, Cursor, or custom AI clients to SparkyFitness using the Model Context Protocol (MCP) server for direct health data access."
+---
+
+SparkyFitness includes a built-in **Model Context Protocol (MCP) server** that lets AI assistants like Claude Desktop and Cursor interact directly with your health data. Instead of copying and pasting numbers into a chat window, the AI can search your food diary, log a workout, check your weight history, and record a custom health metric — all through a standardised, structured interface.
+
+## What is MCP?
+
+The **Model Context Protocol** is an open standard for connecting AI language models to external tools and data sources. An MCP server exposes a set of named *tools* with defined schemas; an MCP client (the AI) calls those tools in the course of answering your questions or executing multi-step tasks.
+
+SparkyFitness's MCP server runs inside the application process and is exposed at `/api/mcp`. Each request is authenticated by the token embedded in the MCP URL — no separate login flow is required once the URL is configured.
+
+<Note>
+The MCP endpoint uses the **Streamable HTTP** transport introduced in the MCP specification. Clients that support only the older SSE transport are not compatible.
+</Note>
+
+---
+
+## Getting Your MCP Server URL
+
+The MCP URL is unique to your account and contains your authentication token. To retrieve it:
+
+1. Open SparkyFitness and navigate to **Settings → AI Settings → MCP Server**.
+2. Copy the full MCP server URL shown on the page.
+
+The URL follows this format:
+
+```
+https://your-server.com/api/mcp
+```
+
+The authentication token is handled automatically by the server when the request arrives — your Settings page will show the precise URL and any additional headers required for your deployment.
+
+<Warning>
+The MCP URL contains authentication credentials. Treat it like a password — do not share it publicly or commit it to version control.
+</Warning>
+
+---
+
+## Configuring Claude Desktop
+
+Add SparkyFitness as an MCP server in Claude Desktop's configuration file (`claude_desktop_config.json`). The file is located at:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "sparkyfitness": {
+      "url": "https://your-server.com/api/mcp",
+      "transport": "http"
+    }
+  }
+}
+```
+
+Replace `https://your-server.com/api/mcp` with the URL you copied from the Settings page. Save the file and restart Claude Desktop. The SparkyFitness tools will appear in Claude's tools panel.
+
+---
+
+## Configuring Cursor or Other MCP Clients
+
+Any MCP-compatible client that supports the Streamable HTTP transport can connect to SparkyFitness. The generic configuration is:
+
+| Setting | Value |
+|---------|-------|
+| **Transport** | `http` (Streamable HTTP) |
+| **URL** | Your MCP server URL from Settings |
+| **Authentication** | Bearer token (embedded in the URL or passed as a header — see your Settings page) |
+
+For Cursor, open **Settings → MCP Servers** and add a new entry with the URL from your SparkyFitness Settings page.
+
+---
+
+## MCP Tool Reference
+
+The SparkyFitness MCP server registers tools grouped by domain. Each tool accepts structured parameters and returns JSON data. The AI client decides which tool to call based on your natural-language request.
+
+<Accordion title="Nutrition & Food — manage_food">
+
+**Tool name:** `manage_food`
+
+The primary tool for all nutrition tracking. Use it to search foods, log meals, manage your diary, and save meal templates. Multi-turn conversations are supported — the AI can ask for missing details across multiple messages.
+
+| Action | Description |
+|--------|-------------|
+| `search_food` | Search for food items. Parameters: `food_name` (string), `search_type` (`"exact"` or `"broad"`) |
+| `log_food` | Log a food to your diary. Parameters: `food_name`, optional `food_id`, optional `variant_id`, `quantity` (number), `unit` (string), `meal_type` (e.g. `"breakfast"`), `entry_date` (YYYY-MM-DD) |
+| `create_food` | Create a new custom food with full nutritional data (calories, protein, carbs, fat, micronutrients, glycemic index) |
+| `search_meal` | Search for saved meal templates. Parameters: `meal_name` |
+| `log_meal` | Log a meal template to your diary. Parameters: optional `meal_id` or `meal_name`, `meal_type`, `entry_date`, optional `quantity` and `unit` |
+| `list_diary` | Retrieve all food entries for a date. Parameters: optional `entry_date` (defaults to today) |
+| `delete_entry` | Delete a diary entry. Parameters: `entry_id` (UUID), `entry_type` (`"food_entry"` or `"food_entry_meal"`) |
+| `update_entry` | Change the quantity/unit of an entry. Parameters: `entry_id`, `entry_type`, `quantity`, `unit` |
+| `copy_from_yesterday` | Copy entries from a source date to a target date for a specific meal type |
+| `save_as_meal_template` | Save a day's meal slot as a reusable template. Parameters: `entry_date`, `meal_type`, `meal_name`, optional `description` |
+
+**Example prompt:** *"Log 200g of chicken breast for lunch today."*
+
+The AI calls `search_food` to find the food, then `log_food` with the matched `food_id`.
+
+**If a food is not found:** The AI will infer nutritional values and call `create_food` automatically before logging — no manual intervention required.
+
+</Accordion>
+
+<Accordion title="Fitness & Workouts — manage_exercise">
+
+**Tool name:** `manage_exercise`
+
+Comprehensive fitness tracking. Search exercises, log workouts with full set/rep data, manage routines, and view exercise history. Automatically creates exercises that don't yet exist in the database.
+
+| Action | Description |
+|--------|-------------|
+| `search_exercises` | Search the exercise database. Parameters: `searchTerm`, optional `muscleGroup` (e.g. `"Chest"`), optional `equipment` (e.g. `"Dumbbell"`) |
+| `create_exercise` | Create a new exercise definition. Parameters: `name`, optional `category` (`"Strength"`, `"Cardio"`, etc.), optional `calories_per_hour`, optional `description` |
+| `log_exercise` | Log a performed exercise with full detail. Parameters: optional `exercise_id` or `exercise_name`, `entry_date`, optional `duration_minutes`, optional `calories_burned`, optional `notes`, optional `sets` array |
+| `list_exercise_diary` | Get all logged exercises for a date. Parameters: `entry_date` (YYYY-MM-DD) |
+| `get_workout_presets` | Retrieve available workout presets/routines. No parameters. |
+| `log_workout_preset` | Log a full preset to the diary. Parameters: optional `preset_id` or `preset_name`, `entry_date` |
+| `delete_exercise_entry` | Delete an exercise entry. Parameters: `entry_id` (UUID) |
+
+**Sets structure for strength training:**
+
+```json
+{
+  "sets": [
+    {
+      "reps": 10,
+      "weight": 80,
+      "set_type": "Working Set",
+      "rest_time": 90
+    },
+    {
+      "reps": 8,
+      "weight": 80,
+      "set_type": "Working Set"
+    }
+  ]
+}
+```
+
+`set_type` options: `"Working Set"`, `"Warmup"`, `"Drop Set"`, `"Failure"`.
+
+**Example prompt:** *"Log my bench press session: 3 sets of 10 reps at 80kg."*
+
+</Accordion>
+
+<Accordion title="Health Check-ins — manage_checkin">
+
+**Tool name:** `manage_checkin`
+
+Log and retrieve biometric measurements, custom health metrics, mood, sleep, and fasting windows. Supports multi-turn conversations where the AI gathers details across messages.
+
+| Action | Description |
+|--------|-------------|
+| `log_biometrics` | Log weight, steps, height, body measurements. Parameters: `entry_date`, any combination of `weight`, `weight_unit`, `steps`, `height`, `height_unit`, `neck`, `waist`, `hips`, `measurements_unit`, `body_fat` |
+| `log_custom_metric` | Log a value for a user-defined category. Parameters: `category_name`, `value`, optional `unit`, optional `notes`, `entry_date` |
+| `list_categories` | List all custom health categories. No parameters. |
+| `create_category` | Create a new custom category. Parameters: `category_name`, optional `unit` |
+| `log_mood` | Log a mood score. Parameters: `mood_value` (1–10), optional `notes`, `entry_date` |
+| `log_fasting` | Record a fasting window. Parameters: `start_time` (ISO 8601), optional `end_time`, optional `fasting_status` (`"ACTIVE"`, `"COMPLETED"`, `"CANCELLED"`), optional `fasting_type` |
+| `log_sleep` | Log sleep data. Parameters: `entry_date`, optional `duration_seconds`, optional `sleep_score` (0–100), optional `bedtime` (ISO 8601), optional `wake_time` (ISO 8601), optional `source` |
+| `list_checkin_diary` | Retrieve all health entries for a date. Parameters: optional `entry_date` (defaults to today) |
+
+**Unit options:**
+
+- Weight: `"kg"`, `"lbs"`, `"lb"`, `"g"`
+- Height: `"cm"`, `"in"`, `"inch"`, `"ft"`
+- Body measurements: `"cm"`, `"in"`, `"inch"`
+
+**Example prompt:** *"Log my weight as 73.5kg and 8,200 steps for today."*
+
+</Accordion>
+
+<Accordion title="Developer & Debug Tools — devTools (admin only)">
+
+**Tool name:** `devTools`
+
+A collection of utility tools for inspecting the database and server state. These tools are **disabled by default** and only available when both conditions are met:
+
+1. The environment variable `DEV_TOOLS_ENABLED=true` is set on the server.
+2. The MCP request is authenticated with an **admin** API key.
+
+<Warning>
+Dev tools run with elevated database access that bypasses Row Level Security. Keep them disabled in production unless actively debugging.
+</Warning>
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `sparky_inspect_schema` | Inspect a database table's columns and types | `table` (string, e.g. `"foods"`) |
+| `sparky_get_user_info` | Get info about the currently authenticated user | None |
+| `sparky_get_db_stats` | Get connection pool statistics (total, idle, waiting) | None |
+| `sparky_run_project_tests` | Run the project test suite | None |
+
+</Accordion>
+
+---
+
+## Security
+
+The MCP server authenticates every request using the token embedded in the MCP URL. Key security properties:
+
+- **User-scoped:** Each MCP URL is tied to a specific SparkyFitness user account. The AI operates as that user and can only access data that user has permission to read or write.
+- **No cross-user access by default:** The MCP server uses the authenticated user's identity (`authenticatedUserId`) — not any delegation cookie — so family-member delegation does not apply to MCP sessions.
+- **Admin tools gated separately:** Dev tools require both an env-var flag and an admin API key; a regular user's MCP URL cannot unlock them.
+
+---
+
+## HTTPS Requirement
+
+Most AI clients (including Claude Desktop) require the MCP server URL to use **HTTPS**. An HTTP-only deployment will be rejected by the client's transport layer.
+
+<Steps>
+  <Step title="Set up a reverse proxy">
+    Place Nginx, Caddy, or Traefik in front of SparkyFitness. Terminate TLS at the proxy and forward traffic to port `3010`.
+  </Step>
+  <Step title="Obtain a TLS certificate">
+    Use Let's Encrypt (via Certbot or Caddy's automatic HTTPS) for a publicly routable domain, or a self-signed certificate for internal networks.
+  </Step>
+  <Step title="Note on self-signed certificates">
+    iOS, Android, and most desktop AI clients do **not** trust self-signed certificates by default. For external integrations you will need a CA-signed certificate or to install your CA cert as a trusted root on the client device.
+  </Step>
+  <Step title="Update your MCP URL">
+    After enabling HTTPS, return to **Settings → AI Settings → MCP Server** to copy the updated `https://` URL.
+  </Step>
+</Steps>
+
+<Tip>
+Caddy automatically provisions and renews Let's Encrypt certificates with zero configuration when your server is publicly accessible. It is the simplest option for self-hosters who want HTTPS without manual certificate management.
+</Tip>

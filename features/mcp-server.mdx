@@ -1,0 +1,290 @@
+---
+title: "MCP Server: Connect AI Clients to Your Health Data"
+sidebarTitle: "MCP Server"
+description: "Enable SparkyFitness's Model Context Protocol server to connect Claude Desktop, Cursor, or other AI assistants directly to your personal health data."
+---
+
+SparkyFitness includes a built-in **Model Context Protocol (MCP) server** that lets any MCP-compatible AI assistant — Claude Desktop, Cursor, or your own agent — read and write your health data through a structured, authenticated protocol. Once connected, your AI assistant gains the ability to log food and workouts, analyze trends, manage habits and goals, and run a guided daily check-in, all from a natural language prompt in your preferred AI client.
+
+---
+
+## What is MCP?
+
+The [Model Context Protocol](https://modelcontextprotocol.io) is an open standard that lets AI clients call structured tools exposed by a server over HTTP. Rather than copy-pasting data into a chat window, your AI client calls a SparkyFitness tool directly — the server handles the database read or write, and the result comes back as structured data the model can reason about.
+
+SparkyFitness's MCP server is served **in-process** by the main application server at `POST /mcp`. There is no separate container to run.
+
+---
+
+## Enabling the MCP Server
+
+The MCP server is always active when SparkyFitness is running. To connect a client, you only need to:
+
+1. **Generate a Personal API Key** — go to **Settings → Profile → Personal API Key** and click **Generate API Key**. Copy the key.
+2. **Find your MCP endpoint URL**:
+   - Production: `https://<your-host>/mcp`
+   - Local dev (via frontend proxy): `http://localhost:8080/mcp`
+   - Local dev (server direct): `http://localhost:3010/mcp`
+
+---
+
+## Connecting Claude Desktop or Cursor
+
+<Tabs>
+  <Tab title="HTTP clients (Cursor, etc.)">
+    Clients that support streamable HTTP (including Cursor) point directly at `/mcp` with an `Authorization` header:
+
+    ```json
+    {
+      "mcpServers": {
+        "sparky-fitness": {
+          "url": "https://<your-host>/mcp",
+          "headers": {
+            "Authorization": "Bearer <YOUR_API_KEY>"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="stdio clients (Claude Desktop)">
+    Claude Desktop uses a stdio transport and cannot call HTTP directly. Use the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridge. The API key goes in the `env` block using the no-space header form to work around a Claude Desktop argument-parsing quirk:
+
+    ```json
+    {
+      "mcpServers": {
+        "sparky-fitness": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "mcp-remote",
+            "https://<your-host>/mcp",
+            "--header",
+            "Authorization:${AUTH_HEADER}"
+          ],
+          "env": {
+            "AUTH_HEADER": "Bearer <YOUR_API_KEY>"
+          }
+        }
+      }
+    }
+    ```
+
+    For a local server over plain HTTP, add `--allow-http` to the args and use `http://localhost:8080/mcp` — `mcp-remote` rejects non-HTTPS URLs unless that flag is set.
+  </Tab>
+</Tabs>
+
+---
+
+## Available Tools
+
+All MCP tools automatically respect your **unit preferences** (lbs/kg, kcal/kJ, cm/in). You never need to specify unit conversions in your prompts.
+
+### Nutrition & Food
+
+<Accordion title="log_food — Log a food item to your diary">
+  Logs a food item to your daily diary. Handles both existing and new food items. If the food is not found in the database, the AI will infer nutritional details and create it automatically before logging.
+
+  **Example:** *"I just had a 250g steak and a side salad."*
+</Accordion>
+
+<Accordion title="log_meal — Log a saved meal template">
+  Logs a predefined meal template to your diary. Supports a quantity multiplier to scale the template.
+
+  **Example:** *"Log my 'Standard Breakfast' for today."*
+</Accordion>
+
+<Accordion title="log_water — Track water intake">
+  Records a water intake entry for the day.
+
+  **Example:** *"I drank 500ml of water."*
+</Accordion>
+
+<Accordion title="list_diary — View today's food log">
+  Retrieves all logged food and meal entries for a specific date (defaults to today).
+
+  **Example:** *"What have I eaten today?"*
+</Accordion>
+
+<Accordion title="copy_from_yesterday — Copy yesterday's meals">
+  Copies all food entries from a source date to a target date, optionally filtered to a specific meal type (breakfast, lunch, dinner, snacks).
+
+  **Example:** *"Copy my breakfast from yesterday to today."*
+</Accordion>
+
+<Accordion title="get_nutritional_summary — Macro and calorie breakdown">
+  Returns an aggregated nutrition summary for a date range, including calories, protein, carbs, fat, and micronutrients.
+
+  **Example:** *"Give me a breakdown of my macros for the last 7 days."*
+</Accordion>
+
+---
+
+### Exercise & Fitness
+
+<Accordion title="log_exercise — Log a workout or cardio session">
+  Logs an exercise with full set/rep/weight detail for strength training, or duration and calories for cardio. Supports multi-set logging in a single call.
+
+  **Example:** *"Log 3 sets of bench press at 80kg for 10 reps."*
+</Accordion>
+
+<Accordion title="log_workout_preset — Start a saved workout routine">
+  Logs a predefined workout preset (routine) to your exercise diary.
+
+  **Example:** *"Start my 'Leg Day' workout."*
+</Accordion>
+
+<Accordion title="get_exercise_details — Learn how to perform an exercise">
+  Returns the description, muscle groups, and category for a specific exercise.
+
+  **Example:** *"How do I perform a Bulgarian Split Squat?"*
+</Accordion>
+
+<Accordion title="get_exercise_progress — View strength or cardio progress">
+  Shows historical performance for a specific exercise over a configurable time window.
+
+  **Example:** *"Show me my bench press progress over the last month."*
+</Accordion>
+
+<Accordion title="search_exercises — Discover exercises by muscle group or equipment">
+  Searches the exercise library by name, muscle group, and/or equipment.
+
+  **Example:** *"Find some advanced chest exercises using dumbbells."*
+</Accordion>
+
+---
+
+### Biometrics & Check-ins
+
+<Accordion title="sparky_daily_checkin_wizard — Guided daily check-in">
+  Runs a multi-turn guided check-in that prompts you for weight, sleep, mood, water, and any custom metrics you track — all in one conversation flow.
+
+  **Example:** *"I'm ready for my daily check-in."*
+</Accordion>
+
+<Accordion title="log_biometrics — Log weight, steps, and body measurements">
+  Logs weight, steps, height, neck, waist, hips, and body fat percentage. Accepts mixed units (kg/lbs, cm/in) and converts automatically.
+
+  **Example:** *"My weight is 185 lbs today."*
+</Accordion>
+
+<Accordion title="log_sleep — Record sleep duration and quality">
+  Logs sleep duration, quality score, bedtime, and wake time for a given date.
+
+  **Example:** *"I slept 7 hours last night and went to bed at 11 PM."*
+</Accordion>
+
+<Accordion title="log_mood — Track your mood score">
+  Records a mood value (1–10 scale) with optional notes for a specific date.
+
+  **Example:** *"I feel like an 8/10 today."*
+</Accordion>
+
+<Accordion title="get_fasting_status — Check your fasting window">
+  Returns the current status of any active fasting window, including elapsed time and whether you are still fasting.
+
+  **Example:** *"Am I still in my fasting window?"*
+</Accordion>
+
+<Accordion title="get_biometrics_history — View weight and measurement trends">
+  Returns historical biometric data (weight, steps, body measurements) for a date range.
+
+  **Example:** *"Show me my weight trend for the last 30 days."*
+</Accordion>
+
+<Accordion title="log_custom_metric — Log any custom health measurement">
+  Records a value for any user-defined custom health category (blood pressure, glucose, HRV, etc.).
+
+  **Example:** *"My blood pressure was 120/80 today."*
+</Accordion>
+
+---
+
+### Goals, Habits & Reports
+
+<Accordion title="sparky_manage_habits — Track daily habits">
+  Creates, updates, and logs completion for habit entries (supplements, mobility work, medication, etc.).
+
+  **Example:** *"Did I take my vitamins today? Mark them as done."*
+</Accordion>
+
+<Accordion title="sparky_manage_goals — Set and update fitness goals">
+  Creates and manages weight, nutrition, or fitness goals with a target value and deadline.
+
+  **Example:** *"Set a new weight goal of 175 lbs by July."*
+</Accordion>
+
+<Accordion title="sparky_get_report — Get a weekly performance summary">
+  Generates a consolidated health report covering nutrition adherence, exercise volume, sleep, mood, and biometric trends for a time period.
+
+  **Example:** *"Give me a weekly performance summary."*
+</Accordion>
+
+<Accordion title="sparky_manage_profile — Update profile and preferences">
+  Reads and writes profile settings including display units, timezone, and calorie/macro goals.
+
+  **Example:** *"Change my energy display unit to kJ."*
+</Accordion>
+
+---
+
+## Example Prompts
+
+Here are natural language prompts you can use immediately after connecting an MCP client:
+
+<Tabs>
+  <Tab title="Nutrition">
+    - *"Log a bowl of oatmeal with 50g oats, 200ml whole milk, and a banana for breakfast."*
+    - *"What were my total calories and protein yesterday?"*
+    - *"Copy my lunch from yesterday to today."*
+    - *"I drank 2 litres of water today — log it."*
+    - *"Show me my average macros over the last 14 days."*
+  </Tab>
+  <Tab title="Exercise">
+    - *"I just finished a 5km run in 28 minutes."*
+    - *"Log 4 sets of squats: 60kg × 10, 80kg × 8, 90kg × 6, 90kg × 5."*
+    - *"Start my Upper Body workout preset."*
+    - *"How has my deadlift progressed this year?"*
+    - *"What exercises can I do for glutes without any equipment?"*
+  </Tab>
+  <Tab title="Check-ins & Biometrics">
+    - *"Start my daily check-in."*
+    - *"I weigh 83.2 kg this morning."*
+    - *"I slept 6.5 hours, went to bed at midnight, woke up at 6:30 AM."*
+    - *"My mood today is a 7, feeling a bit tired."*
+    - *"Log my blood pressure: 122 over 78."*
+  </Tab>
+  <Tab title="Goals & Reports">
+    - *"Give me a summary of this week's performance."*
+    - *"Set a goal to run 20km per week by end of month."*
+    - *"Did I hit my protein goal every day this week?"*
+    - *"What habits am I tracking and which did I complete today?"*
+  </Tab>
+</Tabs>
+
+---
+
+## Unit Preferences
+
+All MCP tools are **unit-aware**. When you call a tool, SparkyFitness reads your saved unit preferences and converts values automatically:
+
+- Weight displayed and accepted in **kg or lbs** based on your preference
+- Energy displayed in **kcal or kJ**
+- Height and body measurements in **cm or inches**
+- Liquid volumes in **ml or fl oz**
+
+You can change your unit preferences at any time using the `sparky_manage_profile` tool:
+
+> *"Switch my weight display to pounds."*
+
+The change takes effect immediately for all subsequent MCP tool calls.
+
+---
+
+## Security
+
+<Note>
+  MCP tools operate under PostgreSQL **Row Level Security (RLS)**, scoped to the user authenticated by the API key. An MCP session can only read and write data belonging to that specific user — it is impossible to access another user's health data through the MCP interface.
+</Note>
+
+A small set of developer/debugging tools (`sparky_inspect_schema`, `sparky_get_user_info`, `sparky_get_db_stats`) exist but are **disabled by default**. They are only exposed when the `DEV_TOOLS_ENABLED=true` environment variable is set **and** the request authenticates with an admin API key. Keep this disabled in production.

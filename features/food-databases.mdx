@@ -1,0 +1,143 @@
+---
+title: "Food Database Integrations and Search Providers"
+sidebarTitle: "Food Databases"
+description: "Search and import foods from USDA, OpenFoodFacts, FatSecret, Nutritionix, Mealie, Tandoor, Swiss Food DB, and Norish in SparkyFitness."
+---
+
+SparkyFitness supports multiple food data sources so you can find accurate nutritional information regardless of where you live or what you eat. You can enable as many providers as you want, and the food search will query all of them simultaneously and merge the results. Providers that require API keys (FatSecret, Nutritionix, Yazio) are fully optional — free providers like USDA and OpenFoodFacts are available out of the box.
+
+## Available Food Databases
+
+<CardGroup cols={3}>
+  <Card title="USDA Food Data Central" icon="wheat-awn">
+    The official U.S. government food composition database. Covers branded and generic foods with detailed macro and micro nutrient profiles. Free, no API key required.
+  </Card>
+  <Card title="OpenFoodFacts" icon="globe">
+    A community-driven, open-source food database with millions of products from around the world, including barcode data. Free, no API key required.
+  </Card>
+  <Card title="FatSecret" icon="utensils">
+    A large commercial food database with extensive international coverage and a rich branded food catalog. Requires a free FatSecret API key.
+  </Card>
+  <Card title="Nutritionix" icon="chart-bar">
+    Natural language food lookup with support for restaurant menu items and packaged foods. Requires a Nutritionix App ID and API key.
+  </Card>
+  <Card title="Mealie" icon="house">
+    Self-hosted recipe manager integration. Pull recipes directly from your own Mealie instance, complete with per-serving nutrition. Requires your Mealie URL and API key.
+  </Card>
+  <Card title="Tandoor" icon="book-open">
+    Self-hosted recipe manager integration for Tandoor Recipes. Import recipes from your Tandoor instance into the SparkyFitness diary. Requires your Tandoor URL and API key.
+  </Card>
+  <Card title="Swiss Food Database" icon="flag">
+    The official Swiss Federal Food Safety and Veterinary Office (FSVO) food composition database. Free, no API key required.
+  </Card>
+  <Card title="Norish" icon="seedling">
+    An additional food database providing nutritional data for a wide variety of foods. Free, no API key required.
+  </Card>
+  <Card title="Yazio" icon="star">
+    Access to Yazio food data via an unofficial API. Requires a Yazio account credential. Use is subject to Yazio's terms of service.
+  </Card>
+</CardGroup>
+
+---
+
+## Configuring Food Providers
+
+All food providers are managed in **Settings → External Data Sources → Food** tab.
+
+<Steps>
+  <Step title="Open External Data Sources">
+    Go to **Settings** in the sidebar, then navigate to the **External Data Sources** page.
+  </Step>
+  <Step title="Select the Food tab">
+    The page is organized by category. Select the **Food** tab to see the available food database providers.
+  </Step>
+  <Step title="Add a provider">
+    Click **Add** or the **+** button next to a provider. A form will appear with the fields required for that provider.
+  </Step>
+  <Step title="Enter credentials">
+    Fill in the required fields (API keys, URLs, etc.) for the provider. See the sections below for provider-specific requirements.
+  </Step>
+  <Step title="Save and activate">
+    Click **Save**. The provider is immediately active and will appear in food search results.
+  </Step>
+</Steps>
+
+---
+
+## API Key Requirements
+
+| Provider | API Key Required | Where to Get It |
+|---|---|---|
+| USDA Food Data Central | No | — |
+| OpenFoodFacts | No | — |
+| Swiss Food Database | No | — |
+| Norish | No | — |
+| FatSecret | **Yes** (Client ID + Secret) | [platform.fatsecret.com](https://platform.fatsecret.com/api/) |
+| Nutritionix | **Yes** (App ID + API Key) | [developer.nutritionix.com](https://developer.nutritionix.com) |
+| Yazio | **Yes** (account credentials) | Your Yazio account |
+| Mealie | **Yes** (API token + instance URL) | Your Mealie instance → Settings → API Tokens |
+| Tandoor | **Yes** (API token + instance URL) | Your Tandoor instance → Settings → API Tokens |
+
+---
+
+## Self-Hosted Recipe Managers
+
+SparkyFitness has native support for both Mealie and Tandoor, the two most popular self-hosted recipe managers. When configured, their recipes appear as searchable food items so you can log a recipe serving directly to your diary, with the correct per-serving nutrition automatically applied.
+
+### Mealie
+
+<Steps>
+  <Step title="Get your Mealie API token">
+    In your Mealie instance, go to **Settings → API Tokens** and create a new token with read access.
+  </Step>
+  <Step title="Add Mealie in SparkyFitness">
+    In SparkyFitness, go to **Settings → External Data Sources → Food**, add **Mealie**, and enter:
+    - **Instance URL** — e.g. `https://mealie.yourdomain.com`
+    - **API Token** — the token you just created
+  </Step>
+  <Step title="Save">
+    Click **Save**. Your Mealie recipes will now appear in food search results.
+  </Step>
+</Steps>
+
+### Tandoor
+
+<Steps>
+  <Step title="Get your Tandoor API token">
+    In your Tandoor instance, go to **Settings → API Tokens** and generate a new token.
+  </Step>
+  <Step title="Add Tandoor in SparkyFitness">
+    In SparkyFitness, go to **Settings → External Data Sources → Food**, add **Tandoor**, and enter:
+    - **Instance URL** — e.g. `https://tandoor.yourdomain.com`
+    - **API Token** — your Tandoor API token
+  </Step>
+  <Step title="Save">
+    Click **Save**. Tandoor recipes will appear alongside other food search results.
+  </Step>
+</Steps>
+
+---
+
+## Food Search
+
+When you click **Add Food** in your diary, SparkyFitness queries all your enabled food providers simultaneously and merges the results into a single ranked list. You can also:
+
+- **Search recent foods** — foods you have logged before appear at the top for quick re-selection.
+- **Search by barcode** — tap the barcode icon to scan a product using your device camera. Providers that support barcode lookup (OpenFoodFacts, FatSecret, Nutritionix) are queried automatically.
+- **Search all providers at once** — type a food name and results from every active provider are merged and deduplicated in real time.
+
+<Tip>
+  Enable multiple providers for the best coverage. USDA and OpenFoodFacts together cover most generic and international foods for free.
+</Tip>
+
+---
+
+## Family Sharing of Providers
+
+SparkyFitness supports family accounts where a parent or administrator can share their configured food providers with family members. Shared providers appear in the family member's food search without them needing to configure their own API keys.
+
+Provider sharing is controlled by the **`share_external_providers`** family permission. An administrator can grant or revoke this permission per family member in **Settings → Family**.
+
+<Note>
+  Providers marked as **strictly private** (such as those that store personal credentials like Yazio) are never shared, even when `share_external_providers` is enabled, to protect account security.
+</Note>

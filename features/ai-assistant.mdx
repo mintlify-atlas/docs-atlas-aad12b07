@@ -1,0 +1,173 @@
+---
+title: "SparkyAI: AI-Powered Fitness and Nutrition Assistant"
+sidebarTitle: "AI Assistant"
+description: "Use SparkyAI to log food, workouts, water, and body stats via natural language chat. Supports OpenAI, Anthropic, Google, and any OpenAI-compatible endpoint."
+---
+
+SparkyAI is a conversational health assistant built into SparkyFitness that lets you log food, exercise, water intake, and body measurements using plain language — no forms required. It can analyze food photos, answer nutrition questions, review your weekly progress, and suggest meals, all while keeping your data on your own infrastructure. You bring your own AI provider and API key, so your health data never flows through a third-party service you did not choose.
+
+<Note>
+  SparkyAI features are currently in **beta**. Behavior and capabilities may change across releases.
+</Note>
+
+---
+
+## Supported AI Providers
+
+SparkyFitness connects to any major AI provider or local model server:
+
+| Provider | Type | Notes |
+|---|---|---|
+| **OpenAI** | Cloud | GPT-4o, GPT-4o mini, and other OpenAI models |
+| **Anthropic** | Cloud | Claude 3.5 Sonnet, Claude 3 Haiku, and others |
+| **Google AI** | Cloud | Gemini 1.5 Pro, Gemini Flash, and others |
+| **OpenAI-Compatible** | Cloud or Local | OpenRouter, any proxy that speaks the OpenAI API |
+| **LM Studio** | Local | Run models on your own hardware, no API key needed |
+| **Ollama** | Local | Local model server, no API key needed |
+| **Custom** | Any | Any endpoint that accepts OpenAI-style chat completions |
+
+---
+
+## Setting Up AI
+
+<Steps>
+  <Step title="Open AI settings">
+    In SparkyFitness, open the **Sparky AI** chat panel. Click the **settings icon** (⚙️) in the chat header to open the AI service configuration.
+  </Step>
+  <Step title="Add a provider">
+    Click **Add AI Service**. Choose your provider type from the dropdown (OpenAI, Anthropic, Google AI, OpenAI Compatible, or Custom).
+  </Step>
+  <Step title="Enter your API key">
+    Paste your API key from your chosen provider. For local servers (LM Studio, Ollama), leave this field blank.
+  </Step>
+  <Step title="Set the model name (optional)">
+    For OpenAI Compatible and Custom endpoints, enable **Use custom model** and type the exact model name your server exposes. For standard providers, choose a model from the list.
+  </Step>
+  <Step title="Save and set as active">
+    Click **Save**, then click the **Set Active** button on your new configuration. The chat interface will now use this provider.
+  </Step>
+</Steps>
+
+---
+
+## What SparkyAI Can Do
+
+### Log Food via Text or Photo
+
+Describe what you ate in plain language and SparkyAI will identify the food, look up nutrition data, and add it to your diary with one confirmation tap.
+
+> *"I just had a 250g chicken breast with a side salad and 200ml of olive oil dressing."*
+
+You can also upload a photo of your meal. SparkyAI will analyze the image, identify the foods, estimate portions, and propose diary entries for your review.
+
+### Log Exercise
+
+Describe a workout in any format — SparkyAI maps it to an exercise in your library, estimates calories burned, and logs the sets, reps, and duration.
+
+> *"I did 3 sets of bench press at 80kg for 10 reps, then 20 minutes on the treadmill at a light jog."*
+
+### Log Body Metrics and Water Intake
+
+> *"My weight today is 79.5 kg."*
+> *"I drank 500ml of water just now."*
+> *"My blood pressure was 118/76 this morning."*
+
+SparkyAI routes each measurement to the correct field — check-in measurements (weight, steps, height) go to your daily check-in, and custom measurements (blood pressure, glucose, etc.) are stored under your custom categories.
+
+### Answer Nutrition Questions
+
+Ask anything about your data or general nutrition:
+
+> *"How many grams of protein did I eat yesterday?"*
+> *"What are some high-protein breakfast ideas under 400 calories?"*
+> *"Am I hitting my fiber goals this week?"*
+
+### Review Weekly Progress
+
+> *"Give me a summary of my nutrition and exercise for the past 7 days."*
+> *"Show me my weight trend this month."*
+
+### Generate Meal Suggestions
+
+> *"Suggest a high-protein dinner I can make with chicken, broccoli, and rice."*
+> *"What should I eat before a long run?"*
+
+---
+
+## Food Photo Recognition
+
+Uploading a photo is the fastest way to log a complex meal. Click the **image icon** in the chat input bar, select or capture a photo, then send it (optionally with a text description).
+
+SparkyAI uses structured JSON output to parse the AI's response, which means:
+
+- The model **must support structured outputs / JSON mode** for photo analysis to work.
+- Models that only support plain chat will successfully answer text questions but will fail on photo analysis with a clear error message.
+- On OpenRouter, check the model's detail page for the "structured outputs" capability badge before using it for photo logging.
+
+<Tip>
+  For the most accurate food photo analysis, include a size reference in the frame (a fork, plate, or your hand) and take the photo in good lighting.
+</Tip>
+
+---
+
+## Chat History
+
+Every conversation is automatically saved. You can:
+
+- **Browse previous sessions** — past conversations are grouped by date and accessible from the chat history sidebar.
+- **Resume a session** — tap any past entry to continue that conversation with full context.
+- **Clear history** — use **Clear Old History** to remove sessions older than your configured retention period, or **Clear All History** to wipe everything.
+
+Metadata from AI interactions — such as food options generated during a logging session — is stored alongside the message so the assistant can reference it in follow-up turns without re-querying the API.
+
+---
+
+## Troubleshooting AI Providers
+
+<Accordion title="OpenRouter: 'No allowed providers are available for the selected model' (HTTP 404)">
+  This is an **OpenRouter account setting**, not a SparkyFitness bug. OpenRouter serves each model through one or more upstream providers. If your account restricts which providers are allowed, any model whose upstream is excluded returns this 404 error — this most commonly affects the free (`:free`) model tier.
+
+  The error body shows the mismatch:
+  - `available_providers` — providers that can actually serve the model
+  - `requested_providers` — providers your account currently permits
+
+  **Fix:** In your OpenRouter account settings, review your allowed-providers / data-policy settings. Either enable the provider that serves your chosen model, or switch to a model served by a provider you already allow (e.g. an `openai/`, `anthropic/`, or `google/` prefixed model).
+</Accordion>
+
+<Accordion title="Every request 404s — doubled URL">
+  If your custom base URL already ends in `/chat/completions`, SparkyFitness appends its own path suffix and the resulting double path returns a 404.
+
+  **Fix:** Enter only the base URL ending in `/v1`. For example:
+
+  ```
+  https://openrouter.ai/api/v1
+  http://localhost:1234/v1
+  http://localhost:11434/v1
+  ```
+
+  SparkyFitness automatically appends `/chat/completions` for you.
+</Accordion>
+
+<Accordion title="'Model not found' or empty / garbled responses">
+  The model identifier must exactly match one your endpoint hosts. OpenAI model names like `gpt-4o-mini` will not exist on most third-party or local servers.
+
+  **Fix:** For the **OpenAI Compatible** and **Custom** service types, enable **Use custom model** and enter the server's own model identifier — for example `llama-3.1-8b-instruct` or `mistral-7b-instruct-v0.3`.
+</Accordion>
+
+<Accordion title="Chat works but photo analysis or label scan fails">
+  Food photo analysis and nutrition label scanning require **structured JSON output** mode. Some models and servers support plain chat but do not support structured outputs, causing photo requests to fail while text chat still works.
+
+  **Fix:** Switch to a model that advertises structured outputs / JSON mode support. On OpenRouter, each model's detail page lists its supported capabilities. GPT-4o, Claude 3.5 Sonnet, and Gemini 1.5 Pro all support structured outputs.
+</Accordion>
+
+<Accordion title="Local servers (LM Studio, Ollama, llama.cpp) — connection refused or auth error">
+  Local model servers typically run without API key authentication.
+
+  **Fix:**
+  - Leave the **API Key** field completely blank.
+  - Use the server's local base URL:
+    - LM Studio: `http://localhost:1234/v1`
+    - Ollama (OpenAI-compatible endpoint): `http://localhost:11434/v1`
+  - Make sure the server is running and the model is loaded before sending a chat message.
+  - If SparkyFitness is running in Docker, use `http://host.docker.internal:1234/v1` instead of `localhost`.
+</Accordion>

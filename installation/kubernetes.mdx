@@ -1,0 +1,295 @@
+---
+title: "Deploy SparkyFitness on Kubernetes with Helm"
+sidebarTitle: "Kubernetes"
+description: "Deploy SparkyFitness on Kubernetes using the official Helm chart, including values configuration, persistent volume claims, and secret management."
+---
+
+SparkyFitness ships an official Helm chart for Kubernetes deployments. The chart bundles a PostgreSQL subchart (via [HelmForge](https://repo.helmforge.dev)) so you can stand up a fully functional instance — database included — with a single `helm install`. For production workloads you can swap in an external managed database and connect it via `externalDatabase.*` values. Ingress, OIDC, TLS, NetworkPolicies, and External Secrets are all first-class chart options.
+
+<Warning>
+  **Community-maintained:** The Kubernetes and Helm chart support are community-provided. The SparkyFitness core maintainers do not use Kubernetes themselves and cannot provide full review or official support for this installation method. Use at your own discretion and raise issues directly on the [GitHub repository](https://github.com/CodeWithCJ/SparkyFitness).
+</Warning>
+
+## Prerequisites
+
+- **kubectl** configured to point at your target cluster
+- **Helm 3+** — [Install Helm](https://helm.sh/docs/intro/install/)
+- **Kubernetes 1.28+** (enforced by the chart's `kubeVersion` field)
+- A default StorageClass capable of provisioning `ReadWriteOnce` PVCs (required for the bundled PostgreSQL and the server's backup/uploads volumes)
+
+---
+
+## Quick Start
+
+Install SparkyFitness with all defaults (bundled PostgreSQL, no ingress, auto-generated secrets):
+
+```bash
+# Install from the OCI registry
+helm install sparkyfitness oci://ghcr.io/codewithcj/charts/sparkyfitness
+
+# -- OR -- install from a local clone of the repository
+git clone https://github.com/CodeWithCJ/SparkyFitness.git
+helm install sparkyfitness ./SparkyFitness/helm/chart
+```
+
+To customise the deployment, create a `my-values.yaml` file (see sections below) and pass it at install time:
+
+```bash
+helm install sparkyfitness oci://ghcr.io/codewithcj/charts/sparkyfitness \
+  -f my-values.yaml
+```
+
+Upgrade an existing release after editing your values file:
+
+```bash
+helm upgrade sparkyfitness oci://ghcr.io/codewithcj/charts/sparkyfitness \
+  -f my-values.yaml
+```
+
+---
+
+## Chart Reference
+
+### Chart metadata
+
+| Field | Value |
+|---|---|
+| Chart version | `0.3.0` |
+| App version | `v0.16.6.1` |
+| Minimum Kubernetes | `>= 1.28.0` |
+| Source | [github.com/CodeWithCJ/SparkyFitness](https://github.com/CodeWithCJ/SparkyFitness) |
+| Helm README | [helm/README.md](https://github.com/CodeWithCJ/SparkyFitness/blob/main/helm/README.md) |
+
+---
+
+## Key Helm Values
+
+### Global settings
+
+```yaml
+global:
+  # Container image registry prefix — defaults to ghcr.io
+  imageRegistry: "ghcr.io"
+  imagePullSecrets: []
+  storageClass: ""          # Default StorageClass for all PVCs
+  serviceAccount:
+    create: true
+```
+
+### Application configuration (`config.*`)
+
+```yaml
+config:
+  nodeEnv: "production"
+  timezone: "Etc/UTC"
+  logLevel: "info"           # debug | info | warn | error
+  frontendUrl: ""            # Public URL — overridden by ingress/httpRoute when enabled
+
+  disableSignup: false       # Set true to close new registrations
+  adminEmail: ""             # Auto-grants admin to this email on startup
+
+  allowPrivateNetworkCors: false
+  extraTrustedOrigins: ""    # Comma-separated additional trusted origins
+
+  forceEmailLogin: true      # Fail-safe — prevents lockout if OIDC misconfigures
+  disableEmailLogin: false
+```
+
+### Ingress
+
+```yaml
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: sparkyfitness.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+```
+
+For Gateway API (HTTPRoute) use `httpRoute.*` instead of `ingress.*`.
+
+### Server persistence
+
+The backend server needs two persistent volumes. Adjust sizes to match your expected data volume:
+
+```yaml
+server:
+  persistence:
+    backup:
+      size: 5Gi
+      accessMode: ReadWriteOnce
+      mountPath: /app/SparkyFitnessServer/backup
+    uploads:
+      size: 10Gi
+      accessMode: ReadWriteOnce
+      mountPath: /app/SparkyFitnessServer/uploads
+```
+
+<Note>
+  The default deployment strategy for the server is `Recreate` because the backup and uploads PVCs are `ReadWriteOnce`. Switch to `RollingUpdate` only if you provision a `ReadWriteMany` StorageClass for those PVCs.
+</Note>
+
+### Bundled PostgreSQL
+
+```yaml
+postgresql:
+  enabled: true              # Set false to use externalDatabase.*
+  auth:
+    database: sparkyfitness
+    username: sparky_admin   # DB owner used for migrations
+    password: ""             # Auto-generated if empty
+  persistence:
+    enabled: true
+    size: 8Gi
+    accessMode: ReadWriteOnce
+```
+
+### External database
+
+If you bring your own PostgreSQL instance, disable the bundled chart and point to it:
+
+```yaml
+postgresql:
+  enabled: false
+
+externalDatabase:
+  host: "your-db-host"
+  port: 5432
+  database: "sparkyfitness_db"
+  auth:
+    username: "sparky_admin"
+    password: "your_secure_password"
+    # -- OR use an existing K8s Secret (keys: username, password)
+    existingSecret: ""
+```
+
+---
+
+## Secrets Management
+
+### Auto-generated secrets (default)
+
+By default the chart auto-generates `SPARKY_FITNESS_API_ENCRYPTION_KEY` and `BETTER_AUTH_SECRET` on first install using Helm's `lookup` function to persist values across upgrades:
+
+```yaml
+server:
+  secrets:
+    generate: true           # Auto-generate on first install
+    apiEncryptionKey: ""     # Leave empty for auto-generation
+    betterAuthSecret: ""     # Leave empty for auto-generation
+    existingSecret: ""       # Reference an existing K8s Secret instead
+```
+
+<Warning>
+  **GitOps caveat:** In pure `helm template` mode (no live cluster access — some ArgoCD/Flux offline rendering pipelines), `lookup` returns empty and every render produces **new** random values. Applying that output rotates the encryption key and renders all previously encrypted data unrecoverable. For GitOps workflows, use `server.secrets.existingSecret` or the `externalSecrets.*` integration.
+</Warning>
+
+### Using an existing Kubernetes Secret
+
+Create a secret manually and reference it:
+
+```bash
+kubectl create secret generic sparkyfitness-app-secrets \
+  --from-literal=api_encryption_key=$(openssl rand -hex 32) \
+  --from-literal=better_auth_secret=$(openssl rand -hex 32)
+```
+
+```yaml
+server:
+  secrets:
+    generate: false
+    existingSecret: "sparkyfitness-app-secrets"
+```
+
+### External Secrets Operator (advanced)
+
+For Vault or other external secret stores, the chart includes first-class External Secrets Operator support:
+
+```yaml
+externalSecrets:
+  enabled: true
+  apiVersion: v1             # v1beta1 for ESO < 0.10.0
+  refreshInterval: 1h
+  secretStore:
+    name: sparkyfitness
+    vaultPath: sparkyfitness
+    vaultServer: "https://vault.example.com"
+    auth:
+      method: kubernetes
+      mountPath: kubernetes
+      role: external-secrets
+  app:
+    enabled: true
+    remoteKey: app_secret
+```
+
+---
+
+## Email Configuration
+
+```yaml
+config:
+  email:
+    enabled: true
+    host: "smtp.example.com"
+    port: 587
+    secure: false
+    from: "noreply@example.com"
+    secrets:
+      username: "smtp-user"
+      password: "smtp-password"
+      # -- OR use an existing K8s Secret (keys: username, password)
+      existingSecret: ""
+```
+
+---
+
+## Garmin Integration
+
+The Garmin microservice is disabled by default. Enable it when you need Garmin Connect sync:
+
+```yaml
+config:
+  garmin:
+    enabled: true
+    isChinaRegion: false     # Set true for Garmin Connect China
+```
+
+---
+
+## Rate Limiting
+
+```yaml
+config:
+  rateLimiting:
+    windowMs: "60000"        # Time window in ms (default: 60000 = 1 minute)
+    maxRequests: "100"       # Max requests per window (default: 100)
+```
+
+---
+
+## Network Policies
+
+Network policies are opt-in and disabled by default:
+
+```yaml
+networkPolicy:
+  enabled: false
+```
+
+When enabled, set `postgresql.networkPolicy.enabled=true` as well so the bundled subchart also gets a policy. If you use an external database, configure `externalDatabase.networkPolicy.cidrs` to restrict server egress to the DB host.
+
+---
+
+## Resource Defaults
+
+| Component | CPU request | Memory request | CPU limit | Memory limit |
+|---|---|---|---|---|
+| `server` | `200m` | `256Mi` | `1` | `1Gi` |
+| `frontend` | `50m` | `64Mi` | `500m` | `256Mi` |
+| `garmin` | `100m` | `128Mi` | `500m` | `512Mi` |
+| `postgresql` | `100m` | `256Mi` | `500m` | `512Mi` |

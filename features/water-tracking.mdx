@@ -1,0 +1,180 @@
+---
+title: "Water Intake Tracking and Hydration Goals"
+sidebarTitle: "Water Tracking"
+description: "Track daily water intake in SparkyFitness using customizable containers, set hydration goals, and monitor progress toward your daily water target."
+---
+
+Staying consistently hydrated is one of the simplest and highest-impact healthy habits — yet it's also one of the easiest to overlook. SparkyFitness gives you a lightweight, low-friction hydration tracker that fits naturally into your daily routine. Define containers that match the actual vessels you drink from, log each drink with a single tap, and watch your progress bar fill up as you move toward your daily water target. All hydration data lives on your private server alongside the rest of your health information.
+
+## Logging Water
+
+The diary's water section shows your current intake for the day and a row of your saved containers. Logging a drink is a single interaction: tap the container to add one serving's worth of water.
+
+<Steps>
+  <Step title="Open the Diary">
+    Navigate to the **Diary** page for today and scroll to the **Water** section. Your daily progress — current intake vs. goal — is displayed as a progress indicator.
+  </Step>
+  <Step title="Tap a Container">
+    Tap or click the container icon corresponding to what you just drank. One tap adds the container's full volume to today's total. The progress bar updates immediately.
+  </Step>
+  <Step title="Log a Partial or Custom Amount">
+    If you drank less than a full container or want to enter a precise millilitre amount, use the **Manual Entry** option to type in an exact value.
+  </Step>
+  <Step title="Undo or Adjust">
+    Made a mistake? Tap the **–** button next to a container to subtract one serving, or open the entry list to delete individual records.
+  </Step>
+</Steps>
+
+Water intake is stored as individual entries through the measurements service. Each entry records the amount in millilitres, the date, and the source (manual, container tap, or API import):
+
+```http
+POST /api/measurements/water-intake
+{
+  "entry_date": "2025-01-15",
+  "change_drinks": 1,
+  "container_id": "<uuid>"
+}
+```
+
+Use `change_drinks: -1` to remove a serving from the total. The service calculates the actual volume from the container's configured size.
+
+## Custom Containers
+
+Water containers are the building blocks of hydration logging. Each container has a name, volume, unit, and an optional designation as your **primary container** — the one shown most prominently in the diary.
+
+<Steps>
+  <Step title="Open Container Settings">
+    Go to **Settings → Water Containers** (or tap **Manage Containers** from the diary's water section).
+  </Step>
+  <Step title="Create a Container">
+    Click **Add Container** and fill in the details:
+
+    - **Name**: A descriptive label (e.g., "Morning Glass", "Gym Bottle", "Office Mug")
+    - **Volume**: The capacity in your preferred unit
+    - **Unit**: `ml` or `oz`
+  </Step>
+  <Step title="Set a Primary Container">
+    Mark one container as primary — it will be pre-selected and displayed at the top of the diary's water section. You can change this at any time.
+  </Step>
+</Steps>
+
+Example containers and the API calls to create them:
+
+<Tabs>
+  <Tab title="250ml Glass">
+    ```http
+    POST /api/water-containers
+    {
+      "name": "Water Glass",
+      "volume": 250,
+      "unit": "ml"
+    }
+    ```
+  </Tab>
+  <Tab title="500ml Bottle">
+    ```http
+    POST /api/water-containers
+    {
+      "name": "Small Bottle",
+      "volume": 500,
+      "unit": "ml"
+    }
+    ```
+  </Tab>
+  <Tab title="1L Gym Bottle">
+    ```http
+    POST /api/water-containers
+    {
+      "name": "Gym Bottle",
+      "volume": 1000,
+      "unit": "ml"
+    }
+    ```
+  </Tab>
+  <Tab title="8oz Cup">
+    ```http
+    POST /api/water-containers
+    {
+      "name": "Coffee Cup",
+      "volume": 8,
+      "unit": "oz"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+If no primary container has been set, SparkyFitness falls back to a default of **2000 ml / 8 servings** when the primary container endpoint is queried — so you always have a sensible default to tap against.
+
+<Note>
+  Container definitions are per-user. Each family member on your SparkyFitness instance can configure their own set of containers independently.
+</Note>
+
+## Hydration Goals
+
+Your daily water target is set as part of your goals configuration. Navigate to **Settings → Goals** and enter a water intake goal in millilitres. The diary's water progress bar fills relative to this target and turns green when you reach 100%.
+
+<CardGroup cols={2}>
+  <Card title="Set a Daily Target" icon="bullseye">
+    A common starting point is 2,000–2,500 ml per day for adults, but your optimal intake depends on body weight, climate, and activity level. SparkyFitness lets you set any value you like.
+  </Card>
+  <Card title="Track Streaks" icon="fire">
+    The Reports page shows how many consecutive days you have hit your hydration goal — a simple streak metric that helps build the daily habit.
+  </Card>
+</CardGroup>
+
+## API Integration
+
+The health data endpoint accepts water intake records from external sources such as Apple Health (via the iOS Shortcut), the Android companion app, or any custom integration you build. This makes it possible to import data from a smart water bottle, a wearable, or a health platform automatically.
+
+### iOS Shortcut / Apple Health
+
+Water consumed in Apple Health can be forwarded to SparkyFitness using a personal automation or the official SparkyFitness iOS Shortcut. The shortcut calls the `/api/health-data` endpoint with your API key:
+
+```http
+POST /api/measurements/health-data
+Authorization: Bearer <YOUR_API_KEY>
+Content-Type: application/json
+
+[
+  {
+    "type": "water",
+    "value": 350,
+    "unit": "ml",
+    "date": "2025-01-15"
+  }
+]
+```
+
+The health data endpoint accepts an array of records, so you can batch-send multiple readings in a single request. Each record with `type: "water"` is processed and added to that day's water intake total.
+
+### Custom Integration Example
+
+Any HTTP client can push water data to SparkyFitness. Here is a minimal example using `curl`:
+
+```bash
+curl -X POST https://your-sparky-instance.example.com/api/measurements/health-data \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[{"type":"water","value":500,"unit":"ml","date":"2025-01-15"}]'
+```
+
+A successful response returns HTTP `200` with a body describing which records were processed, any errors, and any records that were intentionally skipped:
+
+```json
+{
+  "message": "Health data processed.",
+  "processed": [
+    { "type": "water", "status": "success", "data": { ... } }
+  ],
+  "errors": [],
+  "skipped": []
+}
+```
+
+<Tip>
+  You can send multiple data types in the same request — for example, water, steps, and weight in a single payload. The health data endpoint processes each record independently and reports individual success or failure for each one.
+</Tip>
+
+<Warning>
+  The `/api/measurements/health-data` endpoint authenticates via API key, not session cookie. Generate your API key from **Settings → API Keys** and keep it secret — anyone with the key can write health data to your account.
+</Warning>

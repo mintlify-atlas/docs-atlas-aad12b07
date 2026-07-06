@@ -1,0 +1,396 @@
+---
+title: "Troubleshooting SparkyFitness Deployment Issues"
+sidebarTitle: "Troubleshooting"
+description: "Diagnose and fix common SparkyFitness deployment issues including invalid key errors, database connection failures, CORS problems, and auth misconfigurations."
+---
+
+Most SparkyFitness deployment problems fall into a handful of predictable categories: misconfigured environment variables, database connectivity, authentication setup, and mobile/HTTPS requirements. This guide walks through each category with specific symptoms, root causes, and step-by-step fixes. Start with the server logs — they contain the error message that points you to the right section below.
+
+```bash
+docker compose logs -f sparkyfitness-server
+```
+
+---
+
+## Startup Errors
+
+<Accordion title='"Invalid key length" error on startup'>
+
+**Symptom:** The server container exits immediately with an error containing `Invalid key length` or a similar cryptographic message.
+
+**Cause:** The `SPARKY_FITNESS_API_ENCRYPTION_KEY` environment variable is either missing, too short, or not a valid 64-character hexadecimal string. The encryption layer requires exactly 32 random bytes expressed as 64 hex characters.
+
+**Fix:** Generate a valid key and update your `.env` file or Docker Compose environment:
+
+```bash
+openssl rand -hex 32
+```
+
+Or with Node.js:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the output — it will be exactly 64 characters — and set it as `SPARKY_FITNESS_API_ENCRYPTION_KEY`. Restart the server container.
+
+<Warning>
+If you change this key after users have saved data (API keys, encrypted credentials), that data becomes unreadable. Only regenerate the key on a fresh installation or if you are willing to reset encrypted values.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Server fails to start — missing required environment variables">
+
+**Symptom:** The server container starts but immediately exits, or loops in a crash/restart cycle. Logs show something like `required environment variable not set` or a database connection error on first boot.
+
+**Cause:** One or more required environment variables are absent. The minimum required set is:
+
+- `SPARKY_FITNESS_DB_NAME`
+- `SPARKY_FITNESS_DB_USER`
+- `SPARKY_FITNESS_DB_PASSWORD`
+- `BETTER_AUTH_SECRET` (must be a strong random string; used to sign sessions)
+- `SPARKY_FITNESS_API_ENCRYPTION_KEY` (64-char hex)
+
+**Fix:** Check your `.env` file against the example provided in the repository:
+
+```bash
+docker compose logs sparkyfitness-server | head -50
+```
+
+Ensure every required variable is present and non-empty, then restart:
+
+```bash
+docker compose down && docker compose up -d
+```
+
+</Accordion>
+
+<Accordion title="Database connection refused on startup">
+
+**Symptom:** Server logs show `ECONNREFUSED`, `could not connect to server`, or `Connection refused` pointing at the database host.
+
+**Cause:** The database container is not yet ready, `SPARKY_FITNESS_DB_HOST` is pointing at the wrong hostname, or the port is wrong. In Docker Compose the correct host is the service name (`sparkyfitness-db`), not `localhost`.
+
+**Fix:**
+
+1. Check that the database container is running:
+
+```bash
+docker compose ps
+docker compose logs sparkyfitness-db
+```
+
+2. Verify the environment variable values. The default Compose service name is `sparkyfitness-db` on port `5432`:
+
+```env
+SPARKY_FITNESS_DB_HOST=sparkyfitness-db
+SPARKY_FITNESS_DB_PORT=5432
+```
+
+3. If the database container starts slowly, add a `healthcheck` + `depends_on` condition in your `docker-compose.yml` or simply restart the server container after the database is fully up:
+
+```bash
+docker compose restart sparkyfitness-server
+```
+
+</Accordion>
+
+---
+
+## Authentication Issues
+
+<Accordion title="OIDC / SSO login not working">
+
+**Symptom:** Clicking the SSO login button results in an error, redirect loop, or "Invalid redirect URI" message from the identity provider.
+
+**Common causes and fixes:**
+
+1. **Redirect URI mismatch** — The URI registered with your identity provider must exactly match `https://your-domain.com/api/auth/callback/<provider>`. Check for trailing slashes or HTTP vs. HTTPS mismatches.
+
+2. **Wrong Client ID or Client Secret** — Double-check the values in **Settings → Authentication → OIDC Providers** against what your identity provider issued.
+
+3. **Issuer URL unreachable** — The server must be able to reach the OIDC discovery endpoint (`<issuer>/.well-known/openid-configuration`). Test from inside the server container:
+
+```bash
+docker exec -it sparkyfitness-server curl -s https://your-idp.example.com/.well-known/openid-configuration | head -5
+```
+
+4. **Clock skew** — JWT validation is time-sensitive. Ensure both the SparkyFitness server and the identity provider have their system clocks synchronised (NTP).
+
+</Accordion>
+
+<Accordion title='Locked out of all accounts after enabling 2FA (TOTP)'>
+
+**Symptom:** No users can log in with their authenticator app. This typically happens after the server was restarted with a different `BETTER_AUTH_SECRET`.
+
+**Cause:** `BETTER_AUTH_SECRET` is used to derive TOTP secrets. If this value changes, all existing TOTP enrollments become invalid and users are locked out.
+
+**Fix:** Restore email + password login as a recovery path:
+
+```env
+SPARKY_FITNESS_FORCE_EMAIL_LOGIN=true
+```
+
+Set this variable and restart the server. Users can then log in with email/password and re-enroll their authenticator apps. Once all users have re-enrolled, remove the variable and restart again.
+
+<Warning>
+Never change `BETTER_AUTH_SECRET` on a live deployment. Treat it the same way as an encryption key — set it once on first install and leave it unchanged.
+</Warning>
+
+</Accordion>
+
+<Accordion title="Cannot create a new account (sign-up disabled)">
+
+**Symptom:** The sign-up form is missing or the server returns an error when attempting to register.
+
+**Cause:** `SPARKY_FITNESS_DISABLE_SIGNUP=true` has been set, which prevents new user registrations. This is intentional for single-user or family deployments where the administrator wants to control who has access.
+
+**Fix:** Either remove the variable (or set it to `false`) to re-enable sign-ups, or have the administrator create accounts manually through the admin panel.
+
+</Accordion>
+
+---
+
+## Data Not Syncing
+
+<Accordion title="External device / provider not syncing">
+
+**Symptom:** A connected device (Garmin, Fitbit, Google Health, etc.) stops syncing data after a period of working correctly.
+
+**Cause:** OAuth tokens expire and must be refreshed. If the refresh flow fails (e.g. you revoked app access on the provider's side), the integration stops silently.
+
+**Fix:**
+
+1. Navigate to **Settings → External Providers**.
+2. Find the affected provider and click **Disconnect** (or **Reconnect**).
+3. Re-authorise the connection by completing the OAuth flow again.
+
+Check server logs for OAuth-related errors if reconnecting does not help:
+
+```bash
+docker compose logs -f sparkyfitness-server | grep -i oauth
+```
+
+</Accordion>
+
+<Accordion title="Apple Health / Google Health sync not working on mobile">
+
+**Symptom:** The mobile app connects to the server but health data from Apple Health or Google Health is never received.
+
+**Cause:** Mobile health platform integrations require HTTPS. The native Health frameworks on iOS and Android refuse to send data to HTTP-only endpoints.
+
+**Fix:** Enable HTTPS on your SparkyFitness deployment. See the [MCP Integration guide](/developer/mcp-integration#https-requirement) for reverse proxy setup instructions. The same HTTPS requirement applies here.
+
+Also verify the mobile app's server URL in its settings uses `https://` and not `http://`.
+
+</Accordion>
+
+<Accordion title="API health data POST returns 401 or 403">
+
+**Symptom:** Submitting data to `POST /api/health-data` returns `401 Unauthorized` or `403 Forbidden`.
+
+**401 fix:** The `Authorization` header is missing or malformed. Ensure you are sending:
+
+```
+Authorization: Bearer <your_api_key>
+```
+
+or
+
+```
+X-Api-Key: <your_api_key>
+```
+
+**403 fix:** The API key exists but lacks the required scope. Navigate to **Settings → Security → API Keys**, find the key, and confirm it has the `health_data_write` permission enabled. If not, edit the key to add the permission.
+
+</Accordion>
+
+---
+
+## Mobile App Issues
+
+<Accordion title="Mobile app cannot connect to server">
+
+**Symptom:** The SparkyFitness mobile app shows "Connection failed" or cannot reach the server.
+
+**Cause:** The most common cause is the server running on HTTP while the mobile app requires HTTPS. iOS App Transport Security and Android Network Security Config both block unencrypted HTTP connections by default.
+
+**Fix:**
+1. Set up a reverse proxy (Nginx, Caddy, Traefik) in front of SparkyFitness on port 443.
+2. Obtain a TLS certificate from Let's Encrypt or your internal CA.
+3. Update the server URL in the mobile app to `https://your-domain.com`.
+
+</Accordion>
+
+<Accordion title="Certificate errors on iOS or Android">
+
+**Symptom:** The app connects but shows a TLS certificate error, or silently fails on HTTPS.
+
+**Cause:** A self-signed certificate is being used. iOS and Android ship with the public CA bundle and do not trust certificates signed by unknown root CAs.
+
+**Fix options:**
+
+- Use a CA-signed certificate (e.g. Let's Encrypt) — the easiest solution for internet-accessible servers.
+- For LAN-only deployments, install your self-signed CA certificate as a trusted root on each device. The process varies by platform (iOS: Settings → General → VPN & Device Management; Android: Settings → Security → Install from storage).
+
+</Accordion>
+
+<Accordion title="CORS errors when connecting from a custom origin">
+
+**Symptom:** Browser console or app logs show `CORS policy: No 'Access-Control-Allow-Origin' header is present`.
+
+**Cause:** The request is coming from an origin not listed in SparkyFitness's allowed-origins configuration.
+
+**Fix:** Add your origin to the trusted list using the environment variable:
+
+```env
+SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS=https://192.168.1.100:8080,https://my-custom-domain.com
+```
+
+For local network access from mobile devices on private IP ranges, also enable:
+
+```env
+ALLOW_PRIVATE_NETWORK_CORS=true
+```
+
+Restart the server after changing these values.
+
+</Accordion>
+
+---
+
+## AI Assistant Issues
+
+<Accordion title='OpenRouter returns 404 "No allowed providers"'>
+
+**Symptom:** AI chat fails with a 404 error containing the message "No allowed providers" or similar.
+
+**Cause:** This is an **OpenRouter account restriction**, not a SparkyFitness bug. Your OpenRouter account or plan may have provider-level restrictions that prevent the selected model from being served.
+
+**Fix:** Log in to [openrouter.ai](https://openrouter.ai), check your account's provider settings, and ensure the model you've configured in SparkyFitness is available on your plan. Try switching to a different model in **Settings → AI Settings**.
+
+</Accordion>
+
+<Accordion title='URL doubled — "/chat/completions" appears twice in error'>
+
+**Symptom:** AI requests fail with an error showing the path `/chat/completions/chat/completions` or similar duplication.
+
+**Cause:** The base URL configured in AI Settings already ends with `/chat/completions`. SparkyFitness appends this path automatically.
+
+**Fix:** In **Settings → AI Settings**, update the base URL to end at the domain and version only — for example:
+
+```
+https://api.openai.com/v1
+```
+
+Not:
+
+```
+https://api.openai.com/v1/chat/completions  ← incorrect
+```
+
+</Accordion>
+
+<Accordion title="Food photo analysis fails or returns an error">
+
+**Symptom:** Taking a photo of food for automatic logging fails with an error about image analysis not being supported.
+
+**Cause:** The AI model configured in SparkyFitness does not support vision/image inputs or structured JSON output. Not all models support multimodal input.
+
+**Fix:** Switch to a model with vision capabilities. Compatible options include:
+
+- `gpt-4o` or `gpt-4o-mini` (OpenAI)
+- `claude-3-5-sonnet` (Anthropic via OpenRouter)
+- `google/gemini-flash-1.5` (Google via OpenRouter)
+
+Update the model in **Settings → AI Settings** and test with the built-in connection tester.
+
+</Accordion>
+
+<Accordion title="Local AI server (Ollama / LM Studio) not connecting">
+
+**Symptom:** The AI assistant fails to connect to a locally running Ollama or LM Studio instance.
+
+**Common fixes:**
+
+1. **Leave the API key blank.** Local servers do not require an API key. If a placeholder value is set, some local servers will reject the request.
+
+2. **Set the base URL correctly.** The URL should end in `/v1` — the OpenAI-compatible endpoint:
+
+```
+http://localhost:11434/v1   ← Ollama
+http://localhost:1234/v1    ← LM Studio
+```
+
+3. **Check network accessibility.** If SparkyFitness runs in Docker and the AI server runs on the host, use the Docker host gateway IP instead of `localhost`:
+
+```
+http://host.docker.internal:11434/v1
+```
+
+4. **Verify the model is pulled and running.** For Ollama: `ollama list` to see available models, `ollama pull <model>` if missing.
+
+</Accordion>
+
+---
+
+## Debugging Tips
+
+<CardGroup cols={2}>
+  <Card title="Follow server logs" icon="terminal">
+    Stream live logs from the server container to watch errors as they occur:
+
+    ```bash
+    docker compose logs -f sparkyfitness-server
+    ```
+  </Card>
+  <Card title="Enable verbose logging" icon="magnifying-glass">
+    Set `SPARKY_FITNESS_LOG_LEVEL=DEBUG` in your environment and restart the server for highly detailed output including database queries and request traces.
+  </Card>
+  <Card title="Inspect the database" icon="database">
+    Connect directly to PostgreSQL to inspect data or verify migrations:
+
+    ```bash
+    docker exec -it sparkyfitness-db psql \
+      -U $SPARKY_FITNESS_DB_USER \
+      -d $SPARKY_FITNESS_DB_NAME
+    ```
+  </Card>
+  <Card title="Enable Swagger UI" icon="book">
+    Set `SPARKY_FITNESS_PUBLIC_API_DOCS=true` and restart. Browse to `/api/api-docs` to explore and test every endpoint interactively.
+  </Card>
+</CardGroup>
+
+### Useful Database Queries
+
+Once connected to PostgreSQL, these queries help verify data integrity:
+
+```sql
+-- Check table structure
+\dt
+
+-- View recent food entries
+SELECT id, user_id, entry_date, meal_type FROM food_entries
+ORDER BY created_at DESC LIMIT 10;
+
+-- Check active database connections
+SELECT count(*), state FROM pg_stat_activity GROUP BY state;
+
+-- Verify users exist
+SELECT id, email, created_at FROM "user" ORDER BY created_at DESC LIMIT 5;
+```
+
+### Getting Community Help
+
+If these steps don't resolve your issue, the SparkyFitness community is active and helpful:
+
+- **Discord:** [discord.gg/vcnMT5cPEA](https://discord.gg/vcnMT5cPEA) — fastest response for deployment questions
+- **GitHub Issues:** Use the issue templates for bug reports; include Docker version, server logs (sanitised), and your environment variable list (with secrets redacted)
+
+**When reporting an issue, include:**
+
+1. Your operating system and Docker version
+2. The exact error message from `docker compose logs sparkyfitness-server`
+3. The relevant section of your `docker-compose.yml` and `.env` (with passwords/secrets replaced by placeholders)
+4. Steps to reproduce the problem

@@ -1,20 +1,99 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "SparkyFitness: Self-Hosted Family Fitness Tracker"
+sidebarTitle: "Home"
+description: "SparkyFitness is a privacy-first, self-hosted fitness platform for tracking nutrition, exercise, body metrics, and health — built for families and powered by AI."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+SparkyFitness is an open-source, self-hosted alternative to MyFitnessPal. Track food, workouts, hydration, sleep, body measurements, and more — with full control over your data. It's built for families, supports 20+ health device integrations, and includes an AI-powered assistant for hands-free logging.
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Deploy SparkyFitness with Docker Compose in under five minutes.
+  </Card>
+  <Card title="Installation Options" icon="server" href="/installation/docker-compose">
+    Docker Compose, Kubernetes, Portainer, or build from source.
+  </Card>
+  <Card title="Core Features" icon="heart-pulse" href="/features/nutrition-diary">
+    Nutrition, exercise, body metrics, sleep, fasting, mood tracking, and more.
+  </Card>
+  <Card title="AI Assistant" icon="robot" href="/features/ai-assistant">
+    Log food, workouts, and vitals via natural language and photo recognition.
+  </Card>
+</CardGroup>
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+## What is SparkyFitness?
+
+SparkyFitness is a full-stack fitness tracking application built with React 18 + TypeScript on the frontend and Node.js + Express + PostgreSQL on the backend. It is designed to be self-hosted on your own infrastructure — giving your family complete ownership of all health data without depending on any third-party service.
+
+<CardGroup cols={3}>
+  <Card title="Nutrition Tracking" icon="apple-whole">
+    Log meals, create custom foods and recipes, browse integrated food databases, and analyze macros and micronutrients.
+  </Card>
+  <Card title="Exercise Logging" icon="dumbbell">
+    Record workouts with sets, reps, weight, and duration. Use presets, workout plans, and integrated exercise databases.
+  </Card>
+  <Card title="Body Metrics" icon="weight-scale">
+    Track weight, body measurements, and progress photos. Visualize trends with interactive charts.
+  </Card>
+  <Card title="Device Integrations" icon="watch">
+    Sync with Garmin, Fitbit, Apple Health, Google Health, Withings, Polar, Strava, and more.
+  </Card>
+  <Card title="Family Sharing" icon="users">
+    Grant family members, trainers, or coaches granular access to your data with fine-grained permission controls.
+  </Card>
+  <Card title="MCP Server" icon="plug">
+    Connect AI clients like Claude Desktop directly to your health data via the Model Context Protocol.
+  </Card>
+</CardGroup>
+
+## Get Started in 3 Steps
+
+<Steps>
+  <Step title="Deploy with Docker Compose">
+    Pull the latest images and start all services with a single command:
+    ```bash
+    mkdir sparkyfitness && cd sparkyfitness
+    curl -L -o docker-compose.yml https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/docker-compose.prod.yml
+    curl -L -o .env https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/default.env.example
+    docker compose pull && docker compose up -d
+    ```
+  </Step>
+  <Step title="Configure your environment">
+    Edit the `.env` file to set your database credentials, encryption key, and frontend URL. At minimum, set `SPARKY_FITNESS_API_ENCRYPTION_KEY` (a 64-char hex string) and `BETTER_AUTH_SECRET`. See the [Environment Variables](/installation/environment-variables) guide for all options.
+  </Step>
+  <Step title="Create your account">
+    Open `http://localhost:3004` in your browser, register your first account, and complete the onboarding wizard to set your goals and preferences.
+  </Step>
+</Steps>
+
+<Note>
+  For a full walkthrough including reverse proxy setup, OIDC authentication, and multi-user configuration, see the [Installation Guide](/installation/docker-compose).
+</Note>
+
+## Key Capabilities
+
+<CardGroup cols={2}>
+  <Card title="Privacy-First Architecture" icon="shield-halved" href="/developer/architecture">
+    All data stays on your infrastructure. PostgreSQL Row-Level Security ensures strict per-user data isolation, even in multi-user deployments.
+  </Card>
+  <Card title="AI-Powered Logging" icon="wand-magic-sparkles" href="/features/ai-assistant">
+    SparkyAI lets you log meals, workouts, and vitals by chatting or uploading a photo — powered by OpenAI, Anthropic, Google, or any OpenAI-compatible endpoint.
+  </Card>
+  <Card title="20+ Integrations" icon="link" href="/features/device-integrations">
+    Automatic sync from wearables and health platforms: Garmin, Fitbit, Withings, Apple Health, Google Health, Polar, Strava, Hevy, and more.
+  </Card>
+  <Card title="Developer API" icon="code" href="/developer/api-reference">
+    REST API with JWT and API key authentication. Ingest health data from iOS Shortcuts, Android automations, or any HTTP client.
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+<CardGroup cols={2}>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/vcnMT5cPEA">
+    Get help, share tips, and connect with other SparkyFitness users and contributors.
+  </Card>
+  <Card title="GitHub Discussions" icon="github" href="https://github.com/CodeWithCJ/SparkyFitness/discussions">
+    Ask questions, report bugs, and request features on GitHub.
+  </Card>
+</CardGroup>

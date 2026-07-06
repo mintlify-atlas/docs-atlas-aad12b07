@@ -1,0 +1,198 @@
+---
+title: "Connect SparkyFitness to an External PostgreSQL Database"
+sidebarTitle: "External Database"
+description: "Configure SparkyFitness to use an existing external PostgreSQL 15+ server instead of the bundled Docker database container."
+---
+
+By default, SparkyFitness ships with a PostgreSQL container in `docker-compose.prod.yml`. If you already manage a PostgreSQL server — whether on bare metal, in a VM, or through a managed service such as AWS RDS, Azure Database for PostgreSQL, or CloudNativePG — you can point SparkyFitness at it instead of running the bundled container. This guide explains how to prepare the external database, set the required environment variables, and disable the bundled container.
+
+<Warning>
+  **Community Supported Only.** External and managed database configurations are not officially tested or supported by the core application maintainers. Use this guide at your own risk, and keep an independent backup before making changes.
+</Warning>
+
+---
+
+## Requirements
+
+<CardGroup cols={2}>
+  <Card title="PostgreSQL 15+" icon="database">
+    SparkyFitness requires PostgreSQL 15 or later. UUID generation uses the built-in `gen_random_uuid()` function (available since PostgreSQL 13); no extensions are required as of v0.17.0.
+  </Card>
+  <Card title="Row Level Security" icon="shield">
+    The migration user must **own** the database tables so it can create and manage Row Level Security (RLS) policies. Setting `ALTER DATABASE ... OWNER TO <user>` ensures this automatically.
+  </Card>
+</CardGroup>
+
+---
+
+## Database Users
+
+SparkyFitness uses two PostgreSQL roles:
+
+| Role | Variable | Purpose |
+|---|---|---|
+| **DB User** | `SPARKY_FITNESS_DB_USER` | Runs migrations and schema management. Needs database ownership. |
+| **App User** | `SPARKY_FITNESS_APP_DB_USER` | Used by the live query connection pool with restricted permissions. Created automatically by the app on first startup (Option A), or pre-created by you (Option B). |
+
+<Note>
+  `SPARKY_FITNESS_APP_DB_USER` and `SPARKY_FITNESS_APP_DB_PASSWORD` are **always required** in your `.env` file, regardless of which option you choose. The app uses this role for all runtime queries.
+</Note>
+
+---
+
+## Option A — Standard Setup (App Creates the App User Automatically)
+
+Use this option when your PostgreSQL environment allows the `CREATEROLE` privilege. Run the following SQL as a database superuser:
+
+```sql
+-- 1. Create the database
+CREATE DATABASE sparkyfitness_db;
+
+-- 2. Create the DB Owner user (SPARKY_FITNESS_DB_USER)
+CREATE USER sparky_admin WITH PASSWORD 'your_secure_password';
+
+-- 3. Grant database ownership so sparky_admin can create schemas and tables
+ALTER DATABASE sparkyfitness_db OWNER TO sparky_admin;
+
+-- 4. Grant CREATEROLE so the app can create SPARKY_FITNESS_APP_DB_USER on first startup
+ALTER USER sparky_admin CREATEROLE;
+
+-- 5. PostgreSQL 15+: grant explicit CREATE rights on the public schema
+GRANT ALL ON SCHEMA public TO sparky_admin;
+```
+
+On first startup SparkyFitness will log `Successfully created role` once the app user has been created. After that you can optionally revoke `CREATEROLE` (see [Security Hardening](#security-hardening) below).
+
+---
+
+## Option B — Reduced Privilege Setup (You Pre-create the App User)
+
+Use this option when your environment does not allow `CREATEROLE` (e.g. strict managed databases such as Azure Database for PostgreSQL Flexible Server). The application detects the pre-existing role and skips `CREATE ROLE` entirely.
+
+```sql
+-- 1. Create the database
+CREATE DATABASE sparkyfitness_db;
+
+-- 2. Create the DB Owner user (SPARKY_FITNESS_DB_USER)
+CREATE USER sparky_admin WITH PASSWORD 'your_secure_password';
+
+-- 3. Grant database ownership
+ALTER DATABASE sparkyfitness_db OWNER TO sparky_admin;
+
+-- 4. PostgreSQL 15+: grant explicit CREATE rights on the public schema
+GRANT ALL ON SCHEMA public TO sparky_admin;
+
+-- 5. Pre-create the App User (SPARKY_FITNESS_APP_DB_USER)
+--    sparky_admin does NOT need CREATEROLE when this role already exists
+CREATE USER sparky_app WITH PASSWORD 'another_secure_password';
+```
+
+<Note>
+  With Option B, `sparky_admin` still needs database ownership to run migrations (create tables, schemas, functions, indexes). The only privilege that is no longer required is `CREATEROLE`.
+</Note>
+
+---
+
+## PostgreSQL Extensions
+
+<Note>
+  **No extensions are required** as of v0.17.0. SparkyFitness no longer depends on `uuid-ossp`, `pgcrypto`, or `pg_stat_statements`.
+
+  - UUID generation uses the built-in `gen_random_uuid()` (PostgreSQL 13+), which requires no extension.
+  - Encryption is handled entirely in application code (AES-256-GCM via Node.js `crypto`).
+
+  If you are upgrading an existing installation that has these extensions installed, the migration `20260618000000_remove_superuser_extensions.sql` will attempt to remove them automatically. Non-superuser environments gracefully skip the `DROP EXTENSION` step — the extensions are unused and harmless if left in place.
+</Note>
+
+---
+
+## Environment Variables
+
+Set the following variables in your `.env` file to point SparkyFitness at your external database:
+
+```bash
+# .env — external database configuration
+SPARKY_FITNESS_DB_HOST=your-db-host          # hostname or IP of your PostgreSQL server
+SPARKY_FITNESS_DB_PORT=5432                  # PostgreSQL port (default: 5432)
+SPARKY_FITNESS_DB_NAME=sparkyfitness_db      # database name created above
+SPARKY_FITNESS_DB_USER=sparky_admin          # DB Owner user (SPARKY_FITNESS_DB_USER)
+SPARKY_FITNESS_DB_PASSWORD=your_secure_password
+
+# App user — created automatically (Option A) or pre-created by you (Option B)
+SPARKY_FITNESS_APP_DB_USER=sparky_app
+SPARKY_FITNESS_APP_DB_PASSWORD=another_secure_password
+```
+
+These variables are already wired into the `sparkyfitness-server` service in `docker-compose.prod.yml`:
+
+```yaml
+# docker-compose.prod.yml (relevant excerpt)
+sparkyfitness-server:
+  environment:
+    SPARKY_FITNESS_DB_HOST: ${SPARKY_FITNESS_DB_HOST:-sparkyfitness-db}
+    SPARKY_FITNESS_DB_PORT: 5432
+    SPARKY_FITNESS_DB_NAME: ${SPARKY_FITNESS_DB_NAME}
+    SPARKY_FITNESS_DB_USER: ${SPARKY_FITNESS_DB_USER:-sparky}
+    SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+    SPARKY_FITNESS_APP_DB_USER: ${SPARKY_FITNESS_APP_DB_USER:-sparkyapp}
+    SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_FITNESS_APP_DB_PASSWORD}
+```
+
+<Note>
+  `SPARKY_FITNESS_DB_PORT` in `docker-compose.prod.yml` is **hard-coded to `5432`** for container-to-container communication. When using an external database, override it in the `environment:` section or set `SPARKY_FITNESS_DB_HOST` to your external host and ensure your external server listens on `5432`, or update the compose file accordingly.
+</Note>
+
+---
+
+## Disable the Bundled Database Container
+
+Once you have configured the external database, comment out or remove the `sparkyfitness-db` service from your `docker-compose.prod.yml` so it does not start:
+
+```yaml
+# docker-compose.prod.yml — disable bundled DB
+services:
+  # sparkyfitness-db:          # <-- comment out the entire service block
+  #   image: postgres:18.3-alpine
+  #   ...
+
+  sparkyfitness-server:
+    # depends_on:              # <-- also remove or comment out this dependency
+    #   - sparkyfitness-db
+    ...
+```
+
+Then bring the stack up:
+
+```bash
+docker compose up -d
+```
+
+SparkyFitness will connect directly to your external PostgreSQL server and run any pending migrations on startup.
+
+---
+
+## Row Level Security
+
+SparkyFitness uses Row Level Security (RLS) to enforce per-user data isolation at the database level. The `sparky_admin` user must be the **owner** of all tables in order to create and manage RLS policies. Setting `ALTER DATABASE sparkyfitness_db OWNER TO sparky_admin` (done in the setup steps above) ensures that tables created during migrations are automatically owned by `sparky_admin`.
+
+---
+
+## Security Hardening
+
+<Accordion title="Revoking CREATEROLE after first startup (Option A only)">
+  The `CREATEROLE` privilege is only needed during initial installation or when a future update introduces a new database role. Once you see the log message `Successfully created role`, you can revoke it:
+
+  ```sql
+  ALTER USER sparky_admin NOCREATEROLE;
+  ```
+
+  **Important:** If you revoke `CREATEROLE` and a future application update requires creating a new role, migrations will fail with a *Permission Denied* error. If this happens, temporarily re-grant `CREATEROLE`, run the update, then revoke it again:
+
+  ```sql
+  -- Temporarily re-grant
+  ALTER USER sparky_admin CREATEROLE;
+
+  -- After upgrade completes, revoke again
+  ALTER USER sparky_admin NOCREATEROLE;
+  ```
+</Accordion>

@@ -1,0 +1,189 @@
+---
+title: "Exercise Logging and Workout Tracking"
+sidebarTitle: "Exercise Logging"
+description: "Log workouts with sets, reps, weight, and duration in SparkyFitness. Use preset workouts, workout plan templates, and browse the exercise database."
+---
+
+SparkyFitness gives you a complete workout journal built for every training style — from barbell strength programs and HIIT circuits to long-distance cardio and recreational activities. Log each session with as much or as little detail as you like: a simple calorie-and-duration entry for a walk, or a full set-by-set breakdown with weights and reps for a lifting session. Every workout entry feeds into your progress charts and calorie burn totals, making it easy to see how your training evolves over time.
+
+## Logging an Exercise
+
+Adding a workout entry follows the same pattern as logging food — navigate to the diary date, open the exercise section, and pick an activity.
+
+<Steps>
+  <Step title="Open the Exercise Section">
+    Go to the **Diary** page for the target date and scroll to the **Exercise** section, then click **Add Exercise**.
+  </Step>
+  <Step title="Find an Exercise">
+    Search for the exercise by name. Results come from the built-in database, Free Exercise DB, Wger integration, and any custom exercises you have added.
+  </Step>
+  <Step title="Enter Activity Details">
+    Depending on the exercise type, fill in the relevant fields:
+
+    - **Strength exercises**: number of sets, reps per set, and weight per set
+    - **Cardio exercises**: duration (minutes), distance, and average heart rate
+    - **General activities**: duration in minutes and estimated calories burned
+  </Step>
+  <Step title="Add Notes or a Photo">
+    Optionally add a text note or attach a workout photo. Photos are stored on your own server and served back through the authenticated `/uploads/exercise_entries/` path.
+  </Step>
+  <Step title="Save the Entry">
+    Click **Add** to save. Calories burned are updated in the diary totals and your exercise history is updated.
+  </Step>
+</Steps>
+
+Each exercise entry supports the following data fields as defined in the API:
+
+| Field | Description |
+|---|---|
+| `exercise_id` | UUID of the exercise from the database |
+| `entry_date` | Date of the workout (YYYY-MM-DD) |
+| `duration_minutes` | Total workout duration |
+| `calories_burned` | Calories expended |
+| `sets` | Array of `{ reps, weight, duration }` objects |
+| `reps` | Total reps (when not using per-set tracking) |
+| `weight` | Weight used (when not using per-set tracking) |
+| `distance` | Distance covered (cardio) |
+| `avg_heart_rate` | Average heart rate during the session |
+| `notes` | Free-text notes |
+| `image_url` | Path to an attached workout photo |
+
+## Exercise Database
+
+SparkyFitness ships with a built-in exercise library and supports two additional external databases that can be enabled in your server settings.
+
+<CardGroup cols={3}>
+  <Card title="Built-in Database" icon="database">
+    A curated set of common strength, cardio, and flexibility exercises available out of the box with no external connections required.
+  </Card>
+  <Card title="Free Exercise DB" icon="dumbbell">
+    An open-source exercise dataset with hundreds of exercises categorized by muscle group and equipment type. Enable it in **Settings → Exercise Databases**.
+  </Card>
+  <Card title="Wger Integration" icon="link">
+    Connect to a Wger instance (self-hosted or the public API) to access its exercise library. Exercises are searched and fetched on demand. Configure the Wger base URL in **Settings → Integrations**.
+  </Card>
+</CardGroup>
+
+All three sources are searched simultaneously when you type in the exercise search field. Results are deduplicated and ranked by relevance. You can use the **Exercise Database Manager** to review which databases are active, sync updates, or disable sources you don't use.
+
+## Custom Exercises
+
+If an exercise isn't in any of the available databases, you can create your own. Custom exercises are stored privately in your SparkyFitness instance.
+
+<Steps>
+  <Step title="Open the Exercise Manager">
+    Go to **Settings → Exercises → Custom Exercises** and click **Add New Exercise**.
+  </Step>
+  <Step title="Enter Exercise Details">
+    Provide a name, description, primary muscle group, and equipment type. These fields are used to filter and display the exercise.
+  </Step>
+  <Step title="Upload an Image (Optional)">
+    Attach a reference image for the exercise. Images are uploaded as `multipart/form-data` and stored under the server's `uploads/` directory.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The custom exercise immediately becomes searchable in the diary and in your workout presets.
+  </Step>
+</Steps>
+
+<Note>
+  Custom exercises are scoped to your user account. They are not shared with other users on the same SparkyFitness instance unless you are managing a family member's profile.
+</Note>
+
+## Workout Presets
+
+A workout preset is a saved collection of exercises with pre-filled sets, reps, and weights that represents a routine you perform repeatedly — for example, "Push Day A" or "5km Easy Run". Presets let you log an entire familiar workout in a few taps.
+
+<Accordion title="Creating a Workout Preset">
+  1. Navigate to **Settings → Workouts → Presets**.
+  2. Click **New Preset** and give it a name.
+  3. Add each exercise, specifying the default sets, reps, and weight or duration.
+  4. Save the preset. It is now available from the diary's **Add Exercise** panel under the **Presets** tab.
+</Accordion>
+
+<Accordion title="Logging from a Preset">
+  1. In the diary's exercise section, choose **Add from Preset**.
+  2. Select the preset from your list.
+  3. Review and adjust any values (e.g., today you lifted heavier), then confirm.
+  4. All exercises in the preset are added as individual diary entries, linked to the preset for progress tracking.
+</Accordion>
+
+## Workout Plan Templates
+
+While presets handle single-session routines, **Workout Plan Templates** let you structure a multi-day training week. A plan template defines which workouts are scheduled for which days of the week, and SparkyFitness can guide you through each session as the days arrive.
+
+<Steps>
+  <Step title="Create a Plan Template">
+    Go to **Settings → Workouts → Plan Templates** and click **New Plan**. Give the plan a name (e.g., "Push/Pull/Legs 3-Day Split").
+  </Step>
+  <Step title="Assign Workouts to Days">
+    For each day of the week, assign a workout preset or define exercises directly. Days without a scheduled workout can be left as rest days.
+  </Step>
+  <Step title="Activate the Plan">
+    Set the plan as active and choose a start date. SparkyFitness will present the day's scheduled workout when you open the diary on each training day.
+  </Step>
+  <Step title="Log the Session">
+    When prompted for the scheduled workout, review the planned exercises, adjust any values, and confirm. Entries are created in the diary and linked back to the plan assignment ID for analytics.
+  </Step>
+</Steps>
+
+You can also log a full plan session directly via the API:
+
+```http
+POST /api/exercise-entries/from-plan
+{
+  "workout_plan_assignment_id": "<uuid>",
+  "entry_date": "2025-01-15",
+  "exercises": [
+    {
+      "exercise_id": "<uuid>",
+      "sets": [
+        { "reps": 8, "weight": 80 },
+        { "reps": 8, "weight": 80 },
+        { "reps": 6, "weight": 82.5 }
+      ],
+      "duration_minutes": 0,
+      "calories_burned": 45,
+      "notes": "Felt strong today"
+    }
+  ]
+}
+```
+
+## Calorie Calculation
+
+SparkyFitness estimates exercise calories burned using a combination of approaches:
+
+<CardGroup cols={2}>
+  <Card title="Manual Entry" icon="pencil">
+    You can always enter calories burned directly. This is the most accurate method when your equipment or a wearable gives you a precise figure.
+  </Card>
+  <Card title="MET-Based Estimation" icon="calculator">
+    For activities in the exercise database, SparkyFitness uses Metabolic Equivalent of Task (MET) values combined with your body weight and session duration to estimate calorie expenditure.
+  </Card>
+  <Card title="Heart Rate Import" icon="heart-pulse">
+    If you sync data from a wearable via the iOS Shortcut or Android app, the calorie figure reported by your device's sensor is imported directly into the exercise entry.
+  </Card>
+  <Card title="Adaptive TDEE Integration" icon="chart-line">
+    Exercise calories feed into the Adaptive TDEE engine, which factors your real-world calorie burn into personalized daily calorie recommendations over time.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Automatically estimated exercise calories are approximations. For the most accurate tracking, enter calories burned from your fitness device or wearable whenever available.
+</Warning>
+
+## Viewing Exercise History and Progress
+
+Every exercise you log builds a historical record. You can review your progress for any specific exercise — including volume, max weight, and trend over time — from the exercise detail screen.
+
+```http
+GET /api/exercise-entries/history/{exerciseId}?limit=20
+```
+
+For chart-ready progress data over a custom date range:
+
+```http
+GET /api/exercise-entries/progress/{exerciseId}?startDate=2025-01-01&endDate=2025-03-31
+```
+
+Both endpoints return time-series data that powers the progress charts in the **Reports** section.

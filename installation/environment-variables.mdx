@@ -1,0 +1,259 @@
+---
+title: "SparkyFitness Environment Variable Reference"
+sidebarTitle: "Environment Variables"
+description: "Complete reference for all SparkyFitness environment variables: required secrets, database config, email, CORS, rate limiting, and AI provider settings."
+---
+
+Environment variables are the primary configuration mechanism for SparkyFitness. They control everything from database credentials and secret keys to email delivery, CORS policy, and optional integrations. For a Docker Compose deployment the variables live in a `.env` file in the same directory as your `docker-compose.yml`. For Kubernetes deployments they are managed through Helm values and Kubernetes Secrets.
+
+<Warning>
+  **Docker Compose users:** For a variable defined in your `.env` file to be visible inside a container, it **must** also be listed in the `environment:` section of the corresponding service in `docker-compose.yml`. Adding a variable to `.env` alone is not sufficient — the container will not see it unless it is explicitly passed through. The production Compose file already wires all documented variables through; this only matters when you add custom or new variables.
+</Warning>
+
+---
+
+## Required Variables
+
+The following variables are **mandatory**. The server will refuse to start if any of them are missing or empty.
+
+<ParamField path="SPARKY_FITNESS_DB_NAME" type="string" required>
+  PostgreSQL database name. Choose a name for your database, for example `sparkyfitness_db`. Must match the database you create during setup.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_DB_USER" type="string" required>
+  PostgreSQL superuser (owner) used for running migrations and schema management. For example: `sparky`. This user must have `CREATEROLE` so the application can automatically create the app user on first startup.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_DB_PASSWORD" type="string" required>
+  Password for `SPARKY_FITNESS_DB_USER`. Use a strong, randomly generated password. **Do not change this after the initial setup** — the password is embedded in the database and changing it requires updating the password in PostgreSQL as well.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_APP_DB_USER" type="string" required>
+  Limited-privilege application database user created automatically by the server on first startup (for example `sparkyapp`). Used for all normal application queries with Row Level Security enforced. Can be changed at any time after initialization.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_APP_DB_PASSWORD" type="string" required>
+  Password for `SPARKY_FITNESS_APP_DB_USER`. Always required — the server uses this to connect the runtime query pool regardless of whether the user was auto-created or pre-created manually.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_FRONTEND_URL" type="string" required>
+  The public URL of your SparkyFitness frontend. This is used for CORS validation and for constructing links in emails. Examples:
+  - Local: `http://localhost:3004`
+  - Production: `https://fitness.example.com`
+
+  Must exactly match the URL you type into your browser, including the scheme and port.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_API_ENCRYPTION_KEY" type="string" required>
+  A 64-character hexadecimal string used to encrypt sensitive data (API tokens, integration credentials) stored in the database. Generate one with:
+
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  or
+
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+  ```
+
+  **Never change this after users have stored integrations** — existing encrypted data will become unreadable.
+</ParamField>
+
+<ParamField path="BETTER_AUTH_SECRET" type="string" required>
+  Secret key used by [Better Auth](https://better-auth.com/) to sign session tokens and to encrypt Two-Factor Authentication (2FA / TOTP) data in the database. Generate with:
+
+  ```bash
+  openssl rand -hex 32
+  ```
+
+  <Warning>
+    **Critical for 2FA users:** This secret encrypts TOTP codes stored in the database. If you change this variable after any user has enabled 2FA, the server loses access to their encrypted codes and **every 2FA-enabled user will be locked out of their account**. Set a permanent value during initial setup and never change it. If you absolutely must rotate this secret, ensure every user has disabled 2FA first.
+  </Warning>
+</ParamField>
+
+---
+
+## Mandatory Volume Paths
+
+These variables define host filesystem paths that Docker mounts as persistent volumes. They are **mandatory** — without them your data will be lost when containers are recreated. Define them in your `.env` file or directly in `docker-compose.yml`.
+
+<ParamField path="DB_PATH" type="string" required>
+  Host path for PostgreSQL data files. Mounted at `/var/lib/postgresql` inside the `sparkyfitness-db` container. Example: `./postgresql` or `/data/sparkyfitness/db`.
+</ParamField>
+
+<ParamField path="SERVER_BACKUP_PATH" type="string" required>
+  Host path for server backup files. Mounted at `/app/SparkyFitnessServer/backup` inside the `sparkyfitness-server` container. Example: `./backup`.
+</ParamField>
+
+<ParamField path="SERVER_UPLOADS_PATH" type="string" required>
+  Host path for user-uploaded files (profile pictures, exercise images). Mounted at `/app/SparkyFitnessServer/uploads` inside the `sparkyfitness-server` container. Example: `./uploads`.
+</ParamField>
+
+---
+
+## Optional Server Variables
+
+These variables are passed to the `sparkyfitness-server` service and control backend behaviour. All are optional and have documented defaults.
+
+<ParamField path="SPARKY_FITNESS_DISABLE_SIGNUP" type="boolean">
+  Set to `true` to disable new user self-registration. Existing users can still log in. Useful after initial setup when you want a private instance.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_ADMIN_EMAIL" type="string">
+  Email address of a user who should automatically receive admin privileges on server startup. If not set, no admin user is promoted automatically.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_LOG_LEVEL" type="string">
+  Logging verbosity for the backend server. Accepted values: `DEBUG`, `INFO`, `WARN`, `ERROR`. Defaults to `INFO`.
+</ParamField>
+
+<ParamField path="NODE_ENV" type="string">
+  Node.js runtime mode. Set to `production` for all deployed instances to enable performance optimisations and tighter security. Defaults to `production` in Docker images.
+</ParamField>
+
+<ParamField path="TZ" type="string">
+  Server timezone. Use a TZ database name, for example `America/New_York` or `Etc/UTC`. Affects log timestamps and scheduled tasks.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_DISABLE_EMAIL_LOGIN" type="boolean">
+  Set to `true` to hide the email/password login form on the sign-in page. Overridden by `SPARKY_FITNESS_FORCE_EMAIL_LOGIN` if that is also set.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_FORCE_EMAIL_LOGIN" type="boolean">
+  Set to `true` to force email/password login to remain enabled regardless of in-app authentication settings. Use this as a fail-safe if you have misconfigured OIDC and need to regain access.
+</ParamField>
+
+<ParamField path="ALLOW_PRIVATE_NETWORK_CORS" type="boolean">
+  Set to `true` to allow CORS requests from private network addresses (`192.168.x.x`, `10.x.x.x`, `127.0.0.1`, `localhost`). Defaults to `false`. Use with caution in production.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS" type="string">
+  Comma-separated list of additional URLs that Better Auth should trust. Useful when accessing the app from specific local IPs alongside `ALLOW_PRIVATE_NETWORK_CORS`. Example: `http://192.168.1.175:8080,http://10.0.0.5:8080`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_PUBLIC_API_DOCS" type="boolean">
+  Set to `true` to make the Swagger API documentation at `/api/api-docs` publicly accessible without authentication. Defaults to `false`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_DB_HOST" type="string">
+  Hostname of the PostgreSQL server. In Docker Compose this defaults to `sparkyfitness-db` (the service name). Only change this when using an external database server.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_DB_PORT" type="string">
+  PostgreSQL port exposed on the **host** for external tools (e.g. pgAdmin, DBeaver). Container-to-container communication always uses port `5432` internally. To use this variable you must also uncomment the `ports:` section under `sparkyfitness-db` in `docker-compose.yml`.
+</ParamField>
+
+---
+
+## Email Settings
+
+Configure these variables on the `sparkyfitness-server` service to enable email notifications (password resets, magic links). If not configured, email functionality is disabled.
+
+<ParamField path="SPARKY_FITNESS_EMAIL_HOST" type="string">
+  SMTP server hostname. Example: `smtp.example.com`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EMAIL_PORT" type="string">
+  SMTP server port. Common values: `587` (STARTTLS), `465` (TLS), `25` (plain).
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EMAIL_SECURE" type="boolean">
+  Set to `true` to use TLS/SSL for the SMTP connection. Set to `false` for STARTTLS or plain text.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EMAIL_USER" type="string">
+  SMTP authentication username (usually your email address).
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EMAIL_PASS" type="string">
+  SMTP authentication password or app-specific password.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_EMAIL_FROM" type="string">
+  The `From:` address used for outgoing emails. Example: `SparkyFitness <noreply@example.com>`.
+</ParamField>
+
+---
+
+## Rate Limiting
+
+API key requests are rate-limited to prevent abuse. These variables are passed to the `sparkyfitness-server` service.
+
+<ParamField path="SPARKY_FITNESS_API_KEY_RATELIMIT_WINDOW_MS" type="string">
+  The time window in milliseconds over which requests are counted. Defaults to `60000` (1 minute).
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_API_KEY_RATELIMIT_MAX_REQUESTS" type="string">
+  Maximum number of API key requests allowed within the rate-limit window. Defaults to `100`.
+</ParamField>
+
+---
+
+## Frontend Variables
+
+These variables are passed to the `sparkyfitness-frontend` service and configure the Nginx proxy that ships inside the frontend container.
+
+<ParamField path="NGINX_LISTEN_PORT" type="string">
+  Port on which the internal Nginx server listens. Defaults to `80` when running as root, `8080` when running as non-root. In the production Compose file the container's port `80` is mapped to host port `3004`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_SERVER_HOST" type="string">
+  Internal hostname of the backend server, used by the Nginx proxy inside the frontend container to forward API requests. In Docker Compose this should be `sparkyfitness-server` (the service name). Defaults to `sparkyfitness-server`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_SERVER_PORT" type="string">
+  Port the backend API server listens on. Used by the Nginx proxy inside the frontend container. Defaults to `3010`. Do not change unless you have modified the server configuration.
+</ParamField>
+
+---
+
+## Outbound Proxy
+
+Most deployments do not need these variables. They route the **server's outbound** HTTP/HTTPS requests (food provider APIs, fitness integrations, AI providers) through a forward proxy. This is **not** how you expose SparkyFitness over HTTPS to the internet — for that see the reverse proxy guides.
+
+<ParamField path="HTTP_PROXY" type="string">
+  Proxy URL for outbound plain-HTTP requests. Example: `http://proxy.example.com:8888`.
+</ParamField>
+
+<ParamField path="HTTPS_PROXY" type="string">
+  Proxy URL for outbound HTTPS requests. Usually still an `http://` URL — it names the proxy to tunnel through.
+</ParamField>
+
+<ParamField path="NO_PROXY" type="string">
+  Comma-separated list of hostnames and IPs to reach directly, bypassing the proxy. Always include internal Docker service names here (e.g. `localhost,127.0.0.1,sparkyfitness-garmin`) to prevent container-to-container calls from being sent to the proxy.
+</ParamField>
+
+---
+
+## Garmin Integration
+
+<ParamField path="GARMIN_MICROSERVICE_URL" type="string">
+  URL of the Garmin microservice. Must be passed to both `sparkyfitness-server` and `sparkyfitness-garmin`. Example: `http://sparkyfitness-garmin:8000`. The Garmin service is commented out by default in the production Compose file.
+</ParamField>
+
+<ParamField path="GARMIN_SERVICE_PORT" type="string">
+  Port the Garmin microservice listens on. Must match the port in `GARMIN_MICROSERVICE_URL`.
+</ParamField>
+
+<ParamField path="GARMIN_SERVICE_IS_CN" type="boolean">
+  Set to `true` to connect to Garmin Connect China. Defaults to `false`.
+</ParamField>
+
+---
+
+## File-Based Secrets (Docker Swarm / Kubernetes)
+
+For environments that support Docker Secrets or Kubernetes Secrets, two variables can be supplied as file paths instead of plain values:
+
+<ParamField path="SPARKY_FITNESS_API_ENCRYPTION_KEY_FILE" type="string">
+  Path to a file containing the API encryption key. When set, takes precedence over `SPARKY_FITNESS_API_ENCRYPTION_KEY`. Example: `/run/secrets/sparkyfitness_api_key`.
+</ParamField>
+
+<ParamField path="BETTER_AUTH_SECRET_FILE" type="string">
+  Path to a file containing the Better Auth secret. When set, takes precedence over `BETTER_AUTH_SECRET`. Example: `/run/secrets/sparkyfitness_better_auth_secret`.
+</ParamField>
+
+<Note>
+  Use **either** the plain variable or the `_FILE` variant for each secret — never both. The `_FILE` approach is preferred in Docker Swarm and Kubernetes deployments where secrets are mounted into containers as files rather than environment variables.
+</Note>

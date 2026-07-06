@@ -1,0 +1,187 @@
+---
+title: "Deploy SparkyFitness with Docker Compose"
+sidebarTitle: "Docker Compose"
+description: "Step-by-step guide to deploying SparkyFitness using Docker Compose in production or development, including environment configuration and volume setup."
+---
+
+Docker Compose is the recommended deployment method for SparkyFitness. It orchestrates the database, backend server, and frontend into a single stack with a single command, making it the easiest way to get a self-hosted instance up and running in minutes. Both a production mode (using pre-built DockerHub images) and a development mode (with live source reloading) are supported.
+
+## Prerequisites
+
+- **Docker Engine 20.10+** — [Download Docker Desktop](https://www.docker.com/products/docker-desktop) (includes Engine and Compose)
+- **Docker Compose v2+** — bundled with Docker Desktop; verify with `docker compose version`
+
+---
+
+## Production Deployment
+
+<Steps>
+  <Step title="Create a directory and download the Compose files">
+    Create a dedicated directory for SparkyFitness and download the latest production Compose file and example environment file.
+
+    ```bash
+    mkdir sparkyfitness && cd sparkyfitness
+    curl -L -o docker-compose.yml https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/docker-compose.prod.yml
+    curl -L -o .env https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/default.env.example
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Open the downloaded `.env` file in a text editor and fill in the mandatory variables. At a minimum you must set the following before the application will start:
+
+    | Variable | Description |
+    |---|---|
+    | `SPARKY_FITNESS_DB_NAME` | PostgreSQL database name (e.g. `sparkyfitness_db`) |
+    | `SPARKY_FITNESS_DB_USER` | Superuser for migrations (e.g. `sparky`) |
+    | `SPARKY_FITNESS_DB_PASSWORD` | Strong password for the superuser |
+    | `SPARKY_FITNESS_APP_DB_USER` | Limited-privilege app user (e.g. `sparkyapp`) |
+    | `SPARKY_FITNESS_APP_DB_PASSWORD` | Password for the app user |
+    | `SPARKY_FITNESS_FRONTEND_URL` | Public URL of the frontend (e.g. `http://localhost:3004`) |
+    | `SPARKY_FITNESS_API_ENCRYPTION_KEY` | 64-character hex string — generate with `openssl rand -hex 32` |
+    | `BETTER_AUTH_SECRET` | Long random string — generate with `openssl rand -hex 32` |
+    | `DB_PATH` | Host path for PostgreSQL data (e.g. `./postgresql`) |
+    | `SERVER_BACKUP_PATH` | Host path for server backups (e.g. `./backup`) |
+    | `SERVER_UPLOADS_PATH` | Host path for profile pictures and exercise images (e.g. `./uploads`) |
+
+    For a full description of every variable, see the [Environment Variables](/installation/environment-variables) reference.
+  </Step>
+
+  <Step title="Pull images and start the stack">
+    From inside the `sparkyfitness` directory, run:
+
+    ```bash
+    docker compose pull && docker compose up -d
+    ```
+
+    - `docker compose pull` downloads the latest pre-built images from DockerHub.
+    - `docker compose up -d` starts all services in detached (background) mode.
+  </Step>
+
+  <Step title="Open the application">
+    Once all containers report a healthy status, open your browser and navigate to:
+
+    ```
+    http://localhost:3004
+    ```
+
+    Replace `localhost:3004` with your configured `SPARKY_FITNESS_FRONTEND_URL` if you deployed on a remote server or changed the port.
+  </Step>
+</Steps>
+
+---
+
+## Development Environment
+
+The `docker-helper.sh` script in the `docker/` directory simplifies switching between development and production modes. Development mode builds images from local source code and mounts the source tree into the containers for live reloading.
+
+### Usage
+
+```bash
+./docker/docker-helper.sh [ENVIRONMENT] [ACTION]
+```
+
+**Environments:** `dev` | `prod`
+
+**Actions:**
+
+| Action | Description |
+|---|---|
+| `up` | Start services (builds images for `dev`, pulls images for `prod`) |
+| `down` | Stop and remove containers |
+| `build` | Rebuild Docker images |
+| `logs` | Tail container logs |
+| `ps` | Show container status |
+| `clean` | Stop containers and remove images and volumes |
+
+### Common commands
+
+```bash
+# Start development environment
+./docker/docker-helper.sh dev up
+
+# Start production environment
+./docker/docker-helper.sh prod up
+
+# View logs for development stack
+./docker/docker-helper.sh dev logs
+
+# Rebuild development images after code changes
+./docker/docker-helper.sh dev build
+
+# Tear down and clean up production environment
+./docker/docker-helper.sh prod clean
+```
+
+### Development access URLs
+
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:8080` |
+| Backend API | `http://localhost:3010` |
+| PostgreSQL | `localhost:5432` |
+
+<Note>
+  The development Compose file (`docker-compose.dev.yml`) uses a `.env` file at the repository root. Copy `docker/.env.example` to `.env` in the repo root and fill in your values before running `dev up`.
+</Note>
+
+---
+
+## Docker Services Overview
+
+The `docker-compose.prod.yml` file defines three core services connected on a private `sparkyfitness-network` bridge network:
+
+<CardGroup cols={3}>
+  <Card title="sparkyfitness-db" icon="database">
+    **Image:** `postgres:18.3-alpine`
+
+    PostgreSQL database server. Stores all application data. The port is not exposed to the host by default — only other containers on the same network can reach it.
+  </Card>
+  <Card title="sparkyfitness-server" icon="server">
+    **Image:** `codewithcj/sparkyfitness_server:latest`
+
+    Node.js backend API server. Runs migrations on first start, manages the app database user, and exposes the REST API internally on port `3010`.
+  </Card>
+  <Card title="sparkyfitness-frontend" icon="browser">
+    **Image:** `codewithcj/sparkyfitness:latest`
+
+    React frontend served by Nginx. Maps host port **3004** to container port **80**. Proxies API requests to the backend internally.
+  </Card>
+</CardGroup>
+
+---
+
+## Persistent Volumes
+
+Three host paths must be mounted to prevent data loss when containers are recreated. Configure them in your `.env` file:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DB_PATH` | `./postgresql` | PostgreSQL data directory — mounted at `/var/lib/postgresql` inside the container |
+| `SERVER_BACKUP_PATH` | `./backup` | Server backup files — mounted at `/app/SparkyFitnessServer/backup` |
+| `SERVER_UPLOADS_PATH` | `./uploads` | Profile pictures and exercise images — mounted at `/app/SparkyFitnessServer/uploads` |
+
+<Note>
+  The Garmin Connect microservice (`sparkyfitness-garmin`) is **optional** and is commented out in `docker-compose.prod.yml` by default. To enable it, open your `docker-compose.yml`, uncomment the `sparkyfitness-garmin` service block and its corresponding `depends_on` entry in `sparkyfitness-frontend`, then set the required Garmin environment variables.
+</Note>
+
+---
+
+## Stopping and Removing Services
+
+Stop all running services without deleting data:
+
+```bash
+docker compose stop
+```
+
+Stop and remove containers, networks, and volumes (**this deletes your database data**):
+
+```bash
+docker compose down -v
+```
+
+---
+
+<Tip>
+  Looking for a one-click, no-configuration deployment? **PikaPods** hosts SparkyFitness for you with automatic updates and backups. Visit [PikaPods](https://www.pikapods.com/) and search for SparkyFitness to get started instantly.
+</Tip>

@@ -1,0 +1,177 @@
+---
+title: "Goals, Reports, and Progress Analytics"
+sidebarTitle: "Goals & Reports"
+description: "Set nutrition and fitness goals in SparkyFitness, track progress with daily check-ins, and analyze long-term trends with interactive charts and weekly reports."
+---
+
+Knowing what you are working toward — and being able to see clearly how close you are — is what turns daily logging from a chore into a motivating practice. SparkyFitness combines a flexible goal system with a rich reporting layer to do exactly that. Set calorie and macro targets, define a goal weight, choose a water intake target, and watch the daily dashboard reflect your real-time progress against each one. When you want to zoom out and understand trends over weeks or months, the Reports page delivers interactive charts drawn directly from your diary, check-in, and exercise data.
+
+## Setting Goals
+
+Goals in SparkyFitness are time-aware: each goal has an effective date range, so your targets can evolve as your needs change — for example, moving from a calorie deficit to a maintenance phase, or gradually increasing a protein target as you add muscle.
+
+Navigate to **Settings → Goals** to create or edit your goal configuration. Goals you set here apply from a start date and remain in effect until a new goal supersedes them.
+
+**Supported goal types:**
+
+<CardGroup cols={2}>
+  <Card title="Calorie Target" icon="fire">
+    Set your daily calorie intake goal. The diary's progress bar measures every food entry against this target in real time.
+  </Card>
+  <Card title="Macro Goals" icon="chart-pie">
+    Define targets for protein, carbohydrates, and fat — either in grams or as a percentage of total calories. Per-macro progress rings appear in the diary summary.
+  </Card>
+  <Card title="Weight Goal" icon="scale-balanced">
+    Set a target body weight. The Reports page overlays your goal line on the weight trend chart so you can visualize the gap between current and target.
+  </Card>
+  <Card title="Water Goal" icon="droplet">
+    Set a daily water intake target in millilitres. The diary's hydration progress bar fills relative to this value each day.
+  </Card>
+</CardGroup>
+
+Goals are managed via the timeline API, which supports open-ended goals (no end date) or date-bounded periods:
+
+```http
+POST /api/goals/manage-timeline
+{
+  "p_start_date": "2025-01-01",
+  "p_end_date": null,
+  "calories": 2200,
+  "protein_percentage": 30,
+  "carbs_percentage": 45,
+  "fat_percentage": 25,
+  "water_goal_ml": 2500,
+  "weight_goal": 74.0
+}
+```
+
+To retrieve the goals that were active on a specific date (used by the diary to render goal progress):
+
+```http
+GET /api/goals/by-date/2025-01-15
+```
+
+## Adaptive TDEE
+
+Total Daily Energy Expenditure (TDEE) is the number of calories your body burns in a day. Rather than relying on static formulas, SparkyFitness calculates an **Adaptive TDEE** that learns from your actual logged data over time.
+
+<Accordion title="How Adaptive TDEE Works">
+  The Adaptive TDEE engine looks back over the past 90 days and combines several signals:
+
+  1. **Calorie intake history** — pulled from your food diary entries
+  2. **Weight trend** — calculated from your check-in body weight logs using a 7-day exponential smoothing algorithm
+  3. **BMR estimate** — computed from your profile (age, gender, height, weight) using your chosen algorithm (Mifflin-St Jeor, Harris-Benedict, or others)
+  4. **Activity multiplier** — applied based on your configured activity level
+
+  When the engine has enough data (typically 2–3 weeks of consistent logging), it reports a `HIGH` or `MEDIUM` confidence TDEE estimate derived from the relationship between your calorie intake and your actual weight change. With less data it falls back to a BMR × activity multiplier calculation and reports `LOW` confidence.
+
+  The adaptive TDEE is cached for one hour per user to keep response times fast. It is automatically recalculated when you log a check-in weight or update food entries.
+</Accordion>
+
+When you retrieve goals with the `?adjust=true` query parameter, SparkyFitness uses the adaptive TDEE to adjust your calorie target based on your real-world burn rate — helping you stay on track even as your metabolism changes:
+
+```http
+GET /api/goals/for-date?date=2025-01-15&adjust=true
+```
+
+## Daily Summary
+
+The dashboard and diary view surface a **Daily Summary** that shows your progress against every active goal for the current day:
+
+<CardGroup cols={2}>
+  <Card title="Calories" icon="fire-flame-curved">
+    Calories consumed vs. goal, with exercise calories optionally added to your budget. Remaining calories are shown in green (or red when over).
+  </Card>
+  <Card title="Macros" icon="chart-bar">
+    Protein, carbs, and fat consumed vs. targets — displayed as progress bars or rings. Percentages of total intake are shown alongside gram values.
+  </Card>
+  <Card title="Water" icon="droplet">
+    Total millilitres logged today vs. your daily water goal. The progress indicator updates with every container tap.
+  </Card>
+  <Card title="Weight" icon="scale-balanced">
+    Today's logged weight (if a check-in has been recorded) displayed alongside the trend from the previous 7 days.
+  </Card>
+</CardGroup>
+
+Mini nutrition trends — a compact 7-day sparkline of calories, protein, carbs, and fat — are available via:
+
+```http
+GET /api/reports/mini-nutrition-trends?startDate=2025-01-08&endDate=2025-01-15
+```
+
+## Reports
+
+The **Reports** page provides interactive charts that cover nutrition, weight, exercise, and more. You can select any date range — last week, last month, last 3 months, or a fully custom interval.
+
+<Tabs>
+  <Tab title="Nutrition Trends">
+    Stacked or line charts showing daily calories, protein, carbs, and fat over the selected period. A goal overlay shows your target values as reference lines so you can see how consistently you hit your numbers.
+
+    ```http
+    GET /api/reports/nutrition-trends-with-goals
+      ?startDate=2025-01-01&endDate=2025-01-31
+    ```
+
+    The response includes per-day nutrition totals alongside the goal values active on each day, making it possible to accurately reflect goal changes mid-period.
+  </Tab>
+  <Tab title="Weight & Measurements">
+    Body weight trend with a smoothed rolling average, plus charts for any body measurement you track — body fat percentage, waist circumference, and custom categories. Goal weight is overlaid as a target line.
+  </Tab>
+  <Tab title="Exercise Dashboard">
+    Workout frequency, total volume, and calories burned over the selected period. Filter by equipment type, muscle group, or specific exercise to drill into a particular training focus.
+
+    ```http
+    GET /api/reports/exercise-dashboard
+      ?startDate=2025-01-01&endDate=2025-01-31
+      &muscle=chest
+      &equipment=barbell
+    ```
+  </Tab>
+  <Tab title="Comprehensive Report">
+    The full reports endpoint returns all data — nutrition, measurements, sleep, exercise, and mood — in a single response, which powers the Reports page's combined view:
+
+    ```http
+    GET /api/reports
+      ?startDate=2025-01-01&endDate=2025-01-31
+    ```
+  </Tab>
+</Tabs>
+
+Metrics synced from the Android app or iOS Shortcut (steps, sleep, heart rate, and external calorie data) appear in the lower section of the Reports page alongside your manually-logged data.
+
+<Note>
+  Reports respect family sharing permissions. If you manage a family member's profile, you can view their reports by passing `userId=<uuid>` as a query parameter — provided you have the `reports` permission for that profile.
+</Note>
+
+## Goal Presets
+
+If you follow different nutrition approaches at different times — for example, a high-protein cut, a maintenance phase, or a carb-cycling protocol — **Goal Presets** let you save each configuration and switch between them without re-entering all the numbers.
+
+<Steps>
+  <Step title="Create a Preset">
+    Go to **Settings → Goals → Presets** and click **New Preset**. Enter a name and configure the full set of calorie, macro, and water targets.
+  </Step>
+  <Step title="Apply a Preset">
+    When updating your goals, select a saved preset instead of entering values manually. The preset values are applied as of the selected start date.
+  </Step>
+  <Step title="Update a Preset">
+    Editing a preset does not retroactively change historical goals that were applied from it — it only affects future applications of the preset.
+  </Step>
+</Steps>
+
+## Weekly Goal Plans
+
+For advanced goal scheduling, **Weekly Goal Plans** let you assign different goal presets to different days of the week. This is ideal for approaches like calorie cycling (higher calories on training days, lower on rest days) or protocols where macros vary by day.
+
+<Accordion title="Setting Up a Weekly Goal Plan">
+  1. Go to **Settings → Goals → Weekly Plans** and click **New Plan**.
+  2. Give the plan a name (e.g., "Training Day / Rest Day Cycle").
+  3. For each day of the week (Monday through Sunday), assign a goal preset or leave it blank to fall back to your default goal.
+  4. Set an activation date for the plan.
+
+  Once active, the goal service automatically resolves the correct goal configuration for each date based on which day of the week it falls on. The `adjust=true` parameter on the goals endpoint respects weekly plans when calculating adaptive TDEE adjustments.
+</Accordion>
+
+<Tip>
+  Weekly goal plans work hand-in-hand with workout plan templates. Schedule higher calorie targets on the same days you have strength sessions planned and lower targets on cardio or rest days for a fully coordinated weekly structure.
+</Tip>

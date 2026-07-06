@@ -1,0 +1,222 @@
+---
+title: "Daily Check-In: Weight, Sleep, Mood, and Fasting"
+sidebarTitle: "Daily Check-In"
+description: "Use SparkyFitness daily check-ins to log weight, body measurements, sleep, mood, fasting windows, and progress photos to track wellness over time."
+---
+
+The daily check-in is your holistic wellness snapshot for the day. While the nutrition diary captures what you eat and the exercise log captures what you do, the check-in captures how you are — your weight, body composition, sleep quality, mood, and fasting status. Together these data points build a complete picture of your health over weeks and months, surfaced through trend charts and the reports page. Everything logged during check-in is stored privately on your self-hosted SparkyFitness server and is never shared with third-party services.
+
+## Weight & Body Measurements
+
+The core of the daily check-in is logging your physical measurements. SparkyFitness records a comprehensive set of standard metrics as well as any custom measurements you define.
+
+**Standard check-in measurements:**
+
+| Metric | Field |
+|---|---|
+| Body weight | `weight` |
+| Height | `height` |
+| Body fat percentage | `body_fat_percentage` |
+| Neck circumference | `neck` |
+| Waist circumference | `waist` |
+| Hip circumference | `hips` |
+| Daily steps | `steps` |
+
+To log a check-in measurement, navigate to the **Check-In** page for today (or any past date), enter the values you have available, and save. You do not need to fill in every field — partial check-ins are valid and only the fields you provide are updated.
+
+```http
+POST /api/measurements/check-in
+{
+  "entry_date": "2025-01-15",
+  "weight": 78.4,
+  "body_fat_percentage": 18.2,
+  "waist": 82.5,
+  "steps": 9840
+}
+```
+
+**Custom Measurement Categories** extend the standard set with any metric you want to track — blood pressure, resting heart rate, blood glucose, or anything else relevant to your health. Create a category with a name, data type (numeric, boolean, or text), and tracking frequency (daily or hourly), then log values just like the built-in metrics.
+
+<Accordion title="Creating a Custom Measurement Category">
+  1. Go to **Settings → Measurements → Custom Categories**.
+  2. Click **Add Category**.
+  3. Enter a name (e.g., "Blood Pressure Systolic"), display name, data type, and frequency.
+  4. Save. The new category appears in your check-in form alongside the standard metrics.
+</Accordion>
+
+<Tip>
+  Use the **Trend Charts** in the Measurements tab to visualize any custom category over time, compare multiple metrics on the same chart, or overlay a target value as a goal line.
+</Tip>
+
+## Progress Photos
+
+Attaching progress photos to your check-in lets you visualize body composition changes that the scale doesn't capture. SparkyFitness stores three photo types per check-in date: **front**, **back**, and **side**.
+
+<Steps>
+  <Step title="Open Check-In Photos">
+    On the Check-In page for a given date, scroll to the **Progress Photos** section.
+  </Step>
+  <Step title="Upload a Photo">
+    Click the upload area for the desired angle (front, back, or side) and select an image file. Supported formats: JPEG, PNG, GIF, WebP.
+  </Step>
+  <Step title="Confirm">
+    The photo is verified by inspecting its actual file bytes (not just the filename) and saved to your server's uploads directory. It is served back only to authenticated users with permission to view that profile.
+  </Step>
+</Steps>
+
+Photos can be retrieved or deleted individually via the API:
+
+```http
+# Retrieve photos for a date
+GET /api/measurements/check-in-photos/2025-01-15
+
+# Delete a photo by ID
+DELETE /api/measurements/check-in-photos/photo/{id}
+```
+
+<Warning>
+  Progress photos are sensitive personal data. They are stored on your self-hosted server and served only to authenticated, authorized users — but make sure your server is properly secured with HTTPS and strong authentication.
+</Warning>
+
+## Sleep Tracking
+
+Logging sleep gives SparkyFitness the data it needs to correlate your rest patterns with nutrition, weight changes, and mood trends. Sleep can be entered manually or imported automatically from Apple Health (via the iOS Shortcut) or from a compatible Android integration.
+
+**Manual sleep entry fields:**
+
+| Field | Description |
+|---|---|
+| `entry_date` | The date the sleep session is attributed to (YYYY-MM-DD) |
+| `bedtime` | Timestamp when you went to bed |
+| `wake_time` | Timestamp when you woke up |
+| `duration_in_seconds` | Total sleep duration in seconds |
+| `stage_events` | Optional array of sleep stage events (light, deep, REM) |
+
+```http
+POST /api/sleep/manual_entry
+{
+  "entry_date": "2025-01-15",
+  "bedtime": "2025-01-14T23:00:00Z",
+  "wake_time": "2025-01-15T07:15:00Z",
+  "duration_in_seconds": 30300
+}
+```
+
+Sleep analytics — including nightly duration trends and stage breakdowns when stage data is available — are accessible via:
+
+```http
+GET /api/sleep/analytics?startDate=2025-01-01&endDate=2025-01-31
+```
+
+## Mood Tracking
+
+Track your daily mood alongside your physical metrics to identify correlations between how you feel and what you eat, how you sleep, or how much you exercise.
+
+Each mood entry has a numeric `mood_value` and optional free-text notes. SparkyFitness also supports **custom mood tags** — user-defined labels (such as "anxious", "energized", or "focused") that can be attached to any mood entry for richer qualitative tracking.
+
+<Tabs>
+  <Tab title="Logging a Mood">
+    On the Check-In page, select your mood score for the day and optionally add notes or tags:
+
+    ```http
+    POST /api/mood
+    {
+      "mood_value": 4,
+      "notes": "Felt rested and productive",
+      "entry_date": "2025-01-15",
+      "mood_tags": ["energized", "focused"]
+    }
+    ```
+  </Tab>
+  <Tab title="Custom Mood Tags">
+    Create your own mood vocabulary under **Settings → Mood → Custom Moods**:
+
+    ```http
+    POST /api/mood/custom
+    {
+      "name": "energized",
+      "display_name": "Energized",
+      "icon": "⚡",
+      "color": "#FFD700"
+    }
+    ```
+  </Tab>
+  <Tab title="Mood History">
+    Retrieve mood entries for a date range to power your trend charts:
+
+    ```http
+    GET /api/mood?startDate=2025-01-01&endDate=2025-01-31
+    ```
+  </Tab>
+</Tabs>
+
+## Fasting Tracking
+
+SparkyFitness includes a built-in fasting tracker for logging intermittent fasting windows, extended fasts, or any time-restricted eating protocol. Fasting logs are treated as check-in data and are guarded by the same `checkin` permission.
+
+<Steps>
+  <Step title="Start a Fast">
+    When you begin your fasting window, start a fast by specifying the start time, fasting type (e.g., "16:8 Intermittent Fasting"), and an optional target end time:
+
+    ```http
+    POST /api/fasting/start
+    {
+      "start_time": "2025-01-15T20:00:00Z",
+      "target_end_time": "2025-01-16T12:00:00Z",
+      "fasting_type": "16:8 Intermittent Fasting"
+    }
+    ```
+  </Step>
+  <Step title="Check Your Active Fast">
+    The **Check-In** page and the fasting widget show the elapsed time and remaining time for your current fast. You can also query the active fast directly:
+
+    ```http
+    GET /api/fasting/current
+    ```
+  </Step>
+  <Step title="End the Fast">
+    When you break your fast, log the end time. You can optionally record a mood entry at the same time to capture how you felt coming off the fast:
+
+    ```http
+    POST /api/fasting/end
+    {
+      "id": "<fast-uuid>",
+      "end_time": "2025-01-16T12:05:00Z",
+      "mood": { "value": 4, "notes": "Felt clear-headed" }
+    }
+    ```
+  </Step>
+</Steps>
+
+Your complete fasting history — including total fasts completed, total minutes fasted, and average duration — is available from the fasting stats endpoint and is visualized in the **Reports** section.
+
+## Check-In Wizard
+
+The **Check-In Wizard** is a guided flow that walks you through each check-in category in sequence, so you don't miss any metric. It presents one category at a time — weight, measurements, photos, sleep, mood, fasting — and lets you skip anything you haven't tracked that day.
+
+Access the wizard from the **Check-In** page by clicking **Start Daily Check-In**. The wizard automatically marks today's check-in as complete when you finish, and the completion status appears on the dashboard.
+
+<Note>
+  The wizard respects your configured custom measurement categories. Any categories you have added appear as additional steps in the flow after the standard metrics.
+</Note>
+
+## Charts & Trends
+
+All check-in data is available for visualization in the **Reports** and **Measurements** sections of SparkyFitness.
+
+<CardGroup cols={2}>
+  <Card title="Weight Trend" icon="scale-balanced">
+    A time-series chart of your logged body weight with a smoothed trend line. Overlay your weight goal to see progress toward your target.
+  </Card>
+  <Card title="Body Composition" icon="person">
+    Charts for body fat percentage, waist, hip, and neck circumference. Compare measurements side-by-side to understand how your composition changes.
+  </Card>
+  <Card title="Sleep Duration" icon="bed">
+    Nightly sleep duration over a selected date range. Sleep analytics data is fetched from `/api/sleep/analytics` with start and end dates.
+  </Card>
+  <Card title="Mood Over Time" icon="face-smile">
+    Mood scores plotted over days or weeks. Use this alongside nutrition and sleep data to identify lifestyle patterns that affect how you feel.
+  </Card>
+</CardGroup>
+
+Use the **Date Range Selection** controls on the Reports page to zoom into a specific period — last 7 days, last 30 days, or a custom range. Multiple metrics can be overlaid on the same chart for correlation analysis.

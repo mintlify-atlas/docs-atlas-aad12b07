@@ -1,0 +1,384 @@
+---
+title: "SparkyFitness REST API Reference"
+sidebarTitle: "API Reference"
+description: "REST API reference for SparkyFitness covering authentication, health data ingestion, food entries, exercise logging, measurements, and reporting endpoints."
+---
+
+The SparkyFitness REST API is the backbone of the platform. The frontend consumes it directly, and all data operations — logging meals, recording workouts, submitting health metrics — flow through it. The same API is also available to external integrations: mobile shortcuts, third-party health apps, home-automation platforms, and custom scripts can all push or pull data using the endpoints documented here.
+
+## Authentication
+
+SparkyFitness supports two authentication methods depending on the endpoint being accessed.
+
+### JWT Bearer Token (session-based)
+
+Most endpoints require a valid session cookie or JWT token issued at login. The token is automatically attached by the frontend, but when calling the API from external clients you must pass it in the `Authorization` header:
+
+```bash
+Authorization: Bearer <JWT_TOKEN>
+```
+
+### API Key Authentication
+
+The `/api/health-data` endpoint (and a small set of other external-integration routes) accept an **API key** instead of a session token. This lets headless clients — iOS Shortcuts, Android automations, scripts — push health data without a full login flow.
+
+Pass the key in either header:
+
+```
+Authorization: Bearer <API_KEY>
+X-Api-Key: <API_KEY>
+```
+
+The API key must have the `health_data_write` permission scope. Keys without this scope receive a `403 Forbidden` response.
+
+**Generating an API Key**
+
+1. Open the SparkyFitness web interface.
+2. Navigate to **Settings → Security → API Keys**.
+3. Click **Create New Key**, assign a name and the `health_data_write` permission, then copy the generated key.
+
+**Example — submit weight via API key:**
+
+```bash
+curl -X POST https://your-server.com/api/health-data \
+  -H "Authorization: Bearer spk_your_api_key_here" \
+  -H "Content-Type: application/json" \
+  -d '[{"value": 74.2, "type": "weight", "date": "2025-01-15"}]'
+```
+
+---
+
+## Base URL
+
+```
+http://your-server:3010/api
+```
+
+When SparkyFitness is accessed through its built-in Nginx reverse proxy or a custom proxy, the API is also reachable at:
+
+```
+https://your-domain.com/api
+```
+
+The frontend and server share the same origin in the default Docker Compose setup so relative `/api` paths work from browser context.
+
+---
+
+## Enabling Swagger UI
+
+SparkyFitness ships with a Swagger UI that documents every endpoint interactively. It is **disabled by default** for security. To enable it, set the following environment variable and restart the server container:
+
+```bash
+SPARKY_FITNESS_PUBLIC_API_DOCS=true
+```
+
+Once enabled, browse to:
+
+```
+http://your-server:3010/api/api-docs
+```
+
+<Warning>
+Enabling the public API docs exposes all endpoint schemas and parameter details. Use only in development or on a network-restricted deployment.
+</Warning>
+
+---
+
+## Health Data Endpoint
+
+The health data endpoint is the **primary integration point for external devices and automations**. It accepts batched health observations in a single POST and routes each record to the correct internal service (weight logs, step counts, water intake, custom measurements, etc.).
+
+### `POST /api/health-data`
+
+**Authentication:** API Key (`health_data_write` permission required)
+
+**Content-Type:** `application/json`
+
+Submit an array of health data objects. A single object is also accepted for convenience.
+
+#### Request Body
+
+```json
+[
+  {
+    "value": 74.2,
+    "type": "weight",
+    "date": "2025-01-15"
+  },
+  {
+    "value": 9832,
+    "type": "step",
+    "date": "2025-01-15"
+  },
+  {
+    "value": 650,
+    "type": "water",
+    "date": "2025-01-15",
+    "timestamp": "2025-01-15T08:30:00Z"
+  },
+  {
+    "value": 420,
+    "type": "Active Calories",
+    "date": "2025-01-15"
+  },
+  {
+    "value": 118,
+    "type": "Blood Pressure Systolic",
+    "date": "2025-01-15",
+    "timestamp": "2025-01-15T07:45:00Z"
+  }
+]
+```
+
+#### Request Fields
+
+<ParamField body="value" type="number" required>
+  The measurement value. Must be a number for all built-in types. Custom categories may accept numeric or string values depending on their `data_type` configuration.
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  The type of health data. This field is **case-sensitive**. Built-in types:
+
+  - `weight` — body weight in the user's preferred unit
+  - `step` — daily step count
+  - `water` — water intake in millilitres
+  - `Active Calories` — calories burned through activity (note the capitalisation)
+
+  Any **other string** is treated as a custom measurement category name. If no category with that name exists for the user, one is automatically created.
+</ParamField>
+
+<ParamField body="date" type="string" required>
+  The date of the measurement in `YYYY-MM-DD` format (e.g. `"2025-01-15"`).
+</ParamField>
+
+<ParamField body="timestamp" type="string">
+  Full ISO 8601 timestamp (e.g. `"2025-01-15T08:30:00Z"`). When provided, the server extracts the hour for granular within-day tracking. Optional for all types.
+</ParamField>
+
+#### Response — `200 OK`
+
+The server always returns `200 OK` for a well-formed request body, even when individual records fail. Inspect the `errors` array to detect partial failures.
+
+```json
+{
+  "message": "All health data successfully processed.",
+  "processed": [
+    {
+      "type": "weight",
+      "status": "success",
+      "data": {
+        "id": "a1b2c3d4-...",
+        "user_id": "uuid",
+        "entry_date": "2025-01-15",
+        "weight": 74.2
+      }
+    }
+  ],
+  "errors": [],
+  "skipped": []
+}
+```
+
+**Partial failure (still `200 OK`):**
+
+```json
+{
+  "message": "Some health data entries could not be processed.",
+  "processed": [...],
+  "errors": [
+    {
+      "error": "Missing required fields: value (for scalar types), type, or date/timestamp in one of the entries",
+      "entry": { "value": null, "type": "step", "date": "2025-01-15" }
+    }
+  ],
+  "skipped": []
+}
+```
+
+<Note>
+**Breaking change (v0.18+):** Earlier server versions returned `400 Bad Request` when any record in a batch failed. From v0.18 onwards the server returns `200 OK` with a non-empty `errors` array. Automations that relied on the HTTP status code to detect partial failures must be updated to inspect `errors` instead.
+</Note>
+
+#### Response — `400 Bad Request`
+
+Returned only for completely malformed request bodies (invalid JSON, or non-object array entries):
+
+```json
+{ "error": "Invalid JSON array format." }
+```
+
+#### Response — `401 Unauthorized`
+
+```json
+{ "error": "Unauthorized: Missing API Key" }
+```
+
+#### Response — `403 Forbidden`
+
+```json
+{ "error": "Forbidden: API Key does not have health_data_write permission" }
+```
+
+---
+
+## Core API Endpoints
+
+All core endpoints require **JWT session authentication** unless noted otherwise. Endpoints marked with `diary` require the `diary` permission; those marked with `checkin` require the `checkin` permission (relevant for family-access delegation).
+
+### Food
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/food` | Search food database. Query params: `query`, `type` (`exact` or `broad`) |
+| `POST` | `/api/food` | Create a custom food item with full nutritional data |
+| `GET` | `/api/v2/food/search/:providerType` | Search an external food provider (e.g. `openfoodfacts`, `usda`, `fatsecret`) |
+| `GET` | `/api/v2/food/barcode/:barcode` | Look up a food item by barcode (8–14 digit EAN/UPC) |
+| `GET` | `/api/v2/food/details/:providerType/:externalId` | Fetch full nutritional detail from a provider |
+
+**Example — search local database:**
+
+```bash
+curl -H "Authorization: Bearer $JWT" \
+  "http://your-server:3010/api/food?query=banana&type=broad"
+```
+
+### Food Entries (Diary)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/food-entries` | Get food entries for a date. Query: `selectedDate` (YYYY-MM-DD) |
+| `GET` | `/api/food-entries/by-date/:date` | Get entries for a specific date (path parameter) |
+| `GET` | `/api/food-entries/range/:startDate/:endDate` | Get entries within a date range |
+| `GET` | `/api/food-entries/nutrition/today` | Daily nutrition summary. Query: `date` |
+| `POST` | `/api/food-entries` | Log a food item to the diary |
+| `PUT` | `/api/food-entries/:id` | Update an existing food entry |
+| `DELETE` | `/api/food-entries/:id` | Delete a food entry |
+| `POST` | `/api/food-entries/copy` | Copy entries between meal slots or dates |
+| `POST` | `/api/food-entries/copy-yesterday` | Copy a meal slot from yesterday |
+| `GET` | `/api/food-entries/export/csv` | Export all diary entries as CSV |
+
+**Example — log a food entry:**
+
+```bash
+curl -X POST -H "Authorization: Bearer $JWT" \
+  -H "Content-Type: application/json" \
+  -d '{"food_id":"uuid","quantity":150,"unit":"g","meal_type":"lunch","entry_date":"2025-01-15"}' \
+  http://your-server:3010/api/food-entries
+```
+
+### Exercise Entries
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/exercise-entries/by-date` | Exercise entries for a date. Query: `selectedDate` |
+| `GET` | `/api/v2/exercise-entries/by-date` | v2 — returns grouped sessions with parsed snapshots |
+| `GET` | `/api/v2/exercise-entries/history` | Paginated exercise history. Query: `page`, `pageSize` |
+| `POST` | `/api/exercise-entries` | Log an exercise (supports sets/reps and image upload) |
+| `PUT` | `/api/exercise-entries/:id` | Update an exercise entry |
+| `DELETE` | `/api/exercise-entries/:id` | Delete an exercise entry |
+| `GET` | `/api/exercise-entries/history/:exerciseId` | History for a specific exercise |
+| `GET` | `/api/exercise-entries/progress/:exerciseId` | Progress data over a date range |
+| `POST` | `/api/exercise-entries/from-plan` | Log a full workout plan to the diary |
+
+### Measurements & Check-ins
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/measurements/check-in/:date` | Get check-in for a specific date |
+| `POST` | `/api/measurements/check-in` | Upsert daily check-in (weight, steps, body measurements) |
+| `PUT` | `/api/measurements/check-in/:id` | Update an existing check-in entry |
+| `DELETE` | `/api/measurements/check-in/:id` | Delete a check-in entry |
+| `GET` | `/api/measurements/check-in-measurements-range/:startDate/:endDate` | Check-ins over a date range |
+| `GET` | `/api/measurements/most-recent/:measurementType` | Most recent value for a measurement type |
+| `GET` | `/api/measurements/custom-categories` | List all custom measurement categories |
+| `POST` | `/api/measurements/custom-categories` | Create a new custom category |
+| `PUT` | `/api/measurements/custom-categories/:id` | Update a custom category |
+| `DELETE` | `/api/measurements/custom-categories/:id` | Delete a custom category |
+| `GET` | `/api/measurements/custom-entries/:date` | Custom measurement entries for a date |
+| `POST` | `/api/measurements/custom-entries` | Upsert a custom measurement entry |
+| `DELETE` | `/api/measurements/custom-entries/:id` | Delete a custom entry |
+
+### Water Intake
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/measurements/water-intake/:date` | Aggregated water intake for a date (total ml) |
+| `POST` | `/api/measurements/water-intake` | Add or remove drinks. Body: `entry_date`, `change_drinks`, `container_id` |
+| `PUT` | `/api/measurements/water-intake/:id` | Update a water intake entry |
+| `DELETE` | `/api/measurements/water-intake/:id` | Delete a water intake entry |
+| `GET` | `/api/v2/measurements/water-intake/:date/log` | Individual drink log entries for a date |
+| `DELETE` | `/api/v2/measurements/water-intake/log/:id` | Delete a log entry and recalculate daily total |
+
+### System
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/health` | Health check. Returns `{"status":"UP"}` — no auth required |
+| `GET` | `/api/version/current` | Current application version |
+| `GET` | `/api/version/latest-github` | Latest GitHub release info |
+
+**Example — health check:**
+
+```bash
+curl http://your-server:3010/api/health
+# {"status":"UP"}
+```
+
+**Example — current version:**
+
+```bash
+curl http://your-server:3010/api/version/current
+# {"version":"0.18.0"}
+```
+
+---
+
+## Error Responses
+
+All error responses use a consistent JSON structure:
+
+```json
+{ "error": "A human-readable error message." }
+```
+
+| Status Code | Meaning | Common Causes |
+|-------------|---------|---------------|
+| `400` | Bad Request | Missing required fields, invalid date format, malformed JSON |
+| `401` | Unauthorized | Missing or invalid credentials (no token / no API key) |
+| `403` | Forbidden | Valid credentials but insufficient permissions (wrong scope, family access denied) |
+| `404` | Not Found | Resource with the given ID does not exist or was deleted |
+| `500` | Internal Server Error | Unexpected server-side failure — check server logs |
+
+**Example 400:**
+
+```json
+{ "error": "Selected date is required." }
+```
+
+**Example 403 (API key scope):**
+
+```json
+{ "error": "Forbidden: API Key does not have health_data_write permission" }
+```
+
+---
+
+## Rate Limiting
+
+API key endpoints are rate-limited via the Nginx reverse proxy layer to guard against brute-force and denial-of-service attacks. The default configuration applies limits to the login, signup, and health-data submission paths.
+
+If you hit a rate limit, the server returns:
+
+```
+HTTP 429 Too Many Requests
+```
+
+You can adjust the limits by editing `docker/nginx.conf.template` and restarting the containers:
+
+```nginx
+limit_req_zone $binary_remote_addr zone=login_signup_zone:10m rate=5r/s;
+```
+
+<Tip>
+For high-frequency device integrations (e.g. Apple Health syncing every minute), use batching — send multiple records in a single POST to `/api/health-data` array rather than one request per metric.
+</Tip>

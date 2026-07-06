@@ -1,0 +1,161 @@
+---
+title: "Deploy SparkyFitness with Portainer Stack"
+sidebarTitle: "Portainer"
+description: "Deploy and manage SparkyFitness using Portainer's Stacks UI with a Docker Compose configuration, including volume and environment setup."
+---
+
+Portainer is a lightweight web-based GUI for managing Docker environments. If you prefer a visual interface over the command line, you can deploy SparkyFitness as a Portainer **Stack** — Portainer's equivalent of `docker compose up`. The stack definition is identical to the standard `docker-compose.prod.yml` file, so you get the same three-service topology (database, backend, frontend) managed entirely from your browser.
+
+## Prerequisites
+
+1. **A running Docker environment** — Docker Engine must be installed on your host.
+2. **Portainer installed and accessible** — if you haven't set up Portainer yet, follow the [official Portainer installation guide](https://docs.portainer.io/start/install-ce).
+
+---
+
+## Deploying the Stack
+
+<Steps>
+  <Step title="Navigate to Stacks in Portainer">
+    Log in to your Portainer instance. In the left sidebar, click **Stacks**, then click the **Add stack** button in the top-right corner.
+  </Step>
+
+  <Step title="Name and define the stack">
+    1. Enter a **stack name** — for example, `sparkyfitness`.
+    2. Under **Build method**, choose one of the following options:
+
+    **Option A — Upload file (recommended):** Select **Upload**, then download `docker-compose.prod.yml` from the latest release and upload it:
+
+    ```
+    https://github.com/CodeWithCJ/SparkyFitness/releases/latest/download/docker-compose.prod.yml
+    ```
+
+    **Option B — Web editor:** Select **Web editor** and paste the following Compose definition directly:
+
+    ```yaml
+    services:
+      sparkyfitness-db:
+        image: postgres:18.3-alpine
+        container_name: sparkyfitness-db
+        restart: always
+        environment:
+          POSTGRES_DB: ${SPARKY_FITNESS_DB_NAME}
+          POSTGRES_USER: ${SPARKY_FITNESS_DB_USER}
+          POSTGRES_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+          PUID: 1000
+          GUID: 1000
+        volumes:
+          - ${DB_PATH:-./postgresql}:/var/lib/postgresql
+        networks:
+          - sparkyfitness-network
+
+      sparkyfitness-server:
+        image: codewithcj/sparkyfitness_server:latest
+        environment:
+          SPARKY_FITNESS_LOG_LEVEL: ${SPARKY_FITNESS_LOG_LEVEL}
+          ALLOW_PRIVATE_NETWORK_CORS: ${ALLOW_PRIVATE_NETWORK_CORS:-false}
+          SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS: ${SPARKY_FITNESS_EXTRA_TRUSTED_ORIGINS:-}
+          SPARKY_FITNESS_PUBLIC_API_DOCS: ${SPARKY_FITNESS_PUBLIC_API_DOCS:-false}
+          SPARKY_FITNESS_DB_USER: ${SPARKY_FITNESS_DB_USER:-sparky}
+          SPARKY_FITNESS_DB_HOST: ${SPARKY_FITNESS_DB_HOST:-sparkyfitness-db}
+          SPARKY_FITNESS_DB_NAME: ${SPARKY_FITNESS_DB_NAME}
+          SPARKY_FITNESS_DB_PASSWORD: ${SPARKY_FITNESS_DB_PASSWORD}
+          SPARKY_FITNESS_APP_DB_USER: ${SPARKY_FITNESS_APP_DB_USER:-sparkyapp}
+          SPARKY_FITNESS_APP_DB_PASSWORD: ${SPARKY_FITNESS_APP_DB_PASSWORD}
+          SPARKY_FITNESS_DB_PORT: 5432
+          SPARKY_FITNESS_API_ENCRYPTION_KEY: ${SPARKY_FITNESS_API_ENCRYPTION_KEY}
+          BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+          SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL:-http://0.0.0.0:3004}
+          SPARKY_FITNESS_DISABLE_SIGNUP: ${SPARKY_FITNESS_DISABLE_SIGNUP}
+          SPARKY_FITNESS_ADMIN_EMAIL: ${SPARKY_FITNESS_ADMIN_EMAIL}
+          SPARKY_FITNESS_EMAIL_HOST: ${SPARKY_FITNESS_EMAIL_HOST}
+          SPARKY_FITNESS_EMAIL_PORT: ${SPARKY_FITNESS_EMAIL_PORT}
+          SPARKY_FITNESS_EMAIL_SECURE: ${SPARKY_FITNESS_EMAIL_SECURE}
+          SPARKY_FITNESS_EMAIL_USER: ${SPARKY_FITNESS_EMAIL_USER}
+          SPARKY_FITNESS_EMAIL_PASS: ${SPARKY_FITNESS_EMAIL_PASS}
+          SPARKY_FITNESS_EMAIL_FROM: ${SPARKY_FITNESS_EMAIL_FROM}
+          GARMIN_MICROSERVICE_URL: http://sparkyfitness-garmin:8000
+          PUID: 1000
+          GUID: 1000
+        networks:
+          - sparkyfitness-network
+        restart: always
+        depends_on:
+          - sparkyfitness-db
+        volumes:
+          - ${SERVER_BACKUP_PATH:-./backup}:/app/SparkyFitnessServer/backup
+          - ${SERVER_UPLOADS_PATH:-./uploads}:/app/SparkyFitnessServer/uploads
+
+      sparkyfitness-frontend:
+        image: codewithcj/sparkyfitness:latest
+        ports:
+          - "3004:80"
+        environment:
+          SPARKY_FITNESS_FRONTEND_URL: ${SPARKY_FITNESS_FRONTEND_URL}
+          SPARKY_FITNESS_SERVER_HOST: sparkyfitness-server
+          SPARKY_FITNESS_SERVER_PORT: 3010
+          PUID: 1000
+          GUID: 1000
+        networks:
+          - sparkyfitness-network
+        restart: always
+        depends_on:
+          - sparkyfitness-server
+
+    networks:
+      sparkyfitness-network:
+        driver: bridge
+    ```
+  </Step>
+
+  <Step title="Configure environment variables">
+    Scroll down to the **Environment variables** section within the Portainer stack editor. Click **Add environment variable** for each of the following mandatory variables and supply their values:
+
+    | Variable | Example value | Notes |
+    |---|---|---|
+    | `SPARKY_FITNESS_DB_NAME` | `sparkyfitness_db` | PostgreSQL database name |
+    | `SPARKY_FITNESS_DB_USER` | `sparky` | Superuser for migrations |
+    | `SPARKY_FITNESS_DB_PASSWORD` | *(strong password)* | Do not change after first start |
+    | `SPARKY_FITNESS_APP_DB_USER` | `sparkyapp` | Limited-privilege app user |
+    | `SPARKY_FITNESS_APP_DB_PASSWORD` | *(strong password)* | |
+    | `SPARKY_FITNESS_FRONTEND_URL` | `http://your-server-ip:3004` | Must match the URL you use in your browser |
+    | `SPARKY_FITNESS_API_ENCRYPTION_KEY` | *(64-char hex)* | Generate: `openssl rand -hex 32` |
+    | `BETTER_AUTH_SECRET` | *(random string)* | Generate: `openssl rand -hex 32` |
+    | `DB_PATH` | `./postgresql` | Host path for database files |
+    | `SERVER_BACKUP_PATH` | `./backup` | Host path for backup files |
+    | `SERVER_UPLOADS_PATH` | `./uploads` | Host path for uploaded images |
+
+    For a complete description of every available variable, see the [Environment Variables](/installation/environment-variables) reference.
+  </Step>
+
+  <Step title="Deploy the stack">
+    Click the **Deploy the stack** button at the bottom of the page. Portainer will pull the required Docker images and start all three containers. This may take a few minutes on the first deployment depending on your network speed.
+
+    You can monitor progress in the **Stacks** list — the stack status changes from **Deploying** to **Running** once all services are healthy.
+  </Step>
+
+  <Step title="Access SparkyFitness">
+    Once all containers show a **Running** status, open your browser and navigate to the URL you set for `SPARKY_FITNESS_FRONTEND_URL`:
+
+    ```
+    http://your-server-ip:3004
+    ```
+
+    You will be greeted by the SparkyFitness login and registration page.
+  </Step>
+</Steps>
+
+---
+
+## Managing the Stack
+
+From the **Stacks** view in Portainer you can:
+
+- **Stop / Start** the stack without deleting data.
+- **Update** the stack — edit the Compose definition or environment variables and click **Update the stack** to apply changes.
+- **Pull and redeploy** — use the **Pull and redeploy** button to fetch the latest Docker images and restart the containers with zero manual `docker pull` commands.
+- **Remove** the stack — removes containers and networks. Volume data on your host is preserved unless you explicitly delete the directories.
+
+<Warning>
+  Changing `SPARKY_FITNESS_DB_PASSWORD` or `SPARKY_FITNESS_API_ENCRYPTION_KEY` after the initial deployment will break the application. These values are written into the database on first start and must remain consistent for the lifetime of your instance.
+</Warning>

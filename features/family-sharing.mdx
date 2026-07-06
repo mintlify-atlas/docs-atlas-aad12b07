@@ -1,0 +1,102 @@
+---
+title: "Family and Friends Sharing with Permission Controls"
+sidebarTitle: "Family Sharing"
+description: "Share your SparkyFitness data with family members, friends, personal trainers, or coaches using granular per-permission access controls backed by PostgreSQL RLS."
+---
+
+SparkyFitness lets you connect your account with family members, friends, personal trainers, or coaches so that trusted people can log meals, record workouts, track check-ins, manage medications, or view progress reports on your behalf. The system is built on a **least-privilege boundary isolation** model enforced at the database layer with PostgreSQL Row-Level Security (RLS). Every share is explicitly scoped: no permission ever bleeds across boundaries, and your most sensitive credentials and health data remain strictly owner-only regardless of what you grant.
+
+## Setting Up a Connection
+
+<Steps>
+  <Step title="Open Family Access Manager">
+    Navigate to **Settings → Family Access Manager** in the application sidebar.
+  </Step>
+  <Step title="Add a New Connection">
+    Click **Add Connection**. Enter the **email address** of the person you want to share with — they must already have a SparkyFitness account on the same server.
+  </Step>
+  <Step title="Choose Permissions">
+    Select one or more permissions from the permission matrix (see below). You can mix and match permissions to match exactly what you want the delegate to be able to do.
+  </Step>
+  <Step title="Set an Optional Access End Date">
+    If you want the access to expire automatically, set an **Access End Date**. The database revokes all access the moment that timestamp passes — no manual action is required.
+  </Step>
+  <Step title="Save the Connection">
+    Click **Add Connection**. The new rule will appear under **"Rules I Created"** in the Family Access Manager.
+  </Step>
+</Steps>
+
+<Note>
+  The person you have shared with will see your name in their **Profile Switcher**, located in the top-right corner of the dashboard. They can select your profile to switch contexts and act on your behalf according to the permissions you granted.
+</Note>
+
+## Accessing a Shared Profile
+
+Once a connection is active, the delegate can access the shared profile via the **Profile Switcher** in the top-right corner of the dashboard. Clicking the switcher reveals a dropdown listing all profiles that have been shared with that user. Selecting a name switches the active context: the diary, check-in pages, reports, and libraries all reflect the profile owner's data and settings. The delegate's own data is untouched and remains accessible by switching back to their own profile.
+
+<Tip>
+  Custom food libraries, recipes, custom exercises, and medication inventories are only visible while the delegate has the context switched to your profile. This prevents your personal libraries from cluttering the delegate's own lists.
+</Tip>
+
+## Permission Matrix
+
+SparkyFitness uses seven granular permissions to control exactly what a connected user can read or write within your profile. Permissions are additive — you can grant any combination.
+
+| Permission | Write Privileges | Read Privileges |
+|:---|:---|:---|
+| **Manage Diary**<br/>`can_manage_diary` | Food entries, exercise entries, water logs, daily goal plans | Food/exercise/water logs, daily goal plans, custom food and exercise libraries, read-only profile, layout, and water-container settings. Wellness logs and medication logs are blocked. |
+| **Manage Check-in**<br/>`can_manage_checkin` | Weight, body measurements, progress photos, mood logs, fasting status, sleep logs, custom measurement categories and values (e.g. GLP-1 daily check-in) | Weight history, progress photos, wellness logs (mood, fasting, sleep), custom measurements, read-only profile and layout settings. Diary logs and medication logs are blocked. |
+| **Manage Medications**<br/>`can_manage_medications` | Medication schedules, pen/vial allocations, injection records, titration adjustments, daily symptom logs | Medication lists, schedules, logs, pens, injection sites, titration steps, and symptom entries. Diary and check-in logs are blocked. |
+| **View Reports**<br/>`can_view_reports` | No write access | All wellness, check-in, diary, and medication logs for charts, graphs, and the dashboard. Also includes read-only access to profile, dashboard layout, and onboarding data. |
+| **View Food Library**<br/>`can_view_food_library` | No write access | Custom food list, recipes, and custom meals — including reusable sub-meals — when context is switched. Profile, dashboard layout, and onboarding data are not readable with this permission alone. |
+| **View Exercise Library**<br/>`can_view_exercise_library` | No write access | Custom exercise database and workout presets when context is switched. Profile, dashboard layout, and onboarding data are not readable with this permission alone. |
+| **Share Integrations**<br/>`share_external_providers` | No write access — provider configurations are owner-only | Allows the delegate to use the owner's non-private search provider configurations (FatSecret, USDA, OpenFoodFacts, etc.) to search for food and exercise items. Health device integrations (Garmin, Fitbit, Withings, Google Health, Polar, Strava, Hevy) are strictly private and never shared. |
+
+<Note>
+  A delegate with only `can_view_food_library` or `can_view_exercise_library` cannot read your profile, dashboard layout, or onboarding data. At least one of `can_manage_diary`, `can_manage_checkin`, `can_manage_medications`, or `can_view_reports` is required for that read access.
+</Note>
+
+## Privacy & Security
+
+### Tier 1 — Strictly Private Data (Never Shared)
+
+The following data is **never** accessible to any delegate, regardless of permission level. It is protected at the PostgreSQL RLS layer and cannot be exposed through any sharing configuration:
+
+<CardGroup cols={2}>
+  <Card title="API Keys" icon="key">
+    Your personal API keys (`api_key` table) are owner-only and never delegated.
+  </Card>
+  <Card title="OIDC SSO Connections" icon="link">
+    Your linked OIDC identity providers (`user_oidc_links` table) are strictly private.
+  </Card>
+  <Card title="AI Chat History" icon="message">
+    All Sparky personal AI assistant conversations (`sparky_chat_history` table) are owner-only.
+  </Card>
+  <Card title="Cycle & Pregnancy Data" icon="heart">
+    All reproductive health data — cycle settings, daily entries, cycle records, pregnancy sessions, kick counters, contraction logs, bump photos, and health appointments — is strictly owner-only. This data is **never** shared or delegated, even with `can_view_reports`.
+  </Card>
+</CardGroup>
+
+### Tier 2 — Read-Only Profile & Settings Data
+
+Delegates holding at least one of `can_manage_diary`, `can_manage_checkin`, `can_manage_medications`, or `can_view_reports` can **read** the following data, but only the account owner can modify it:
+
+- **Profile information** — name, date of birth, height, avatar, and similar fields
+- **General preferences** — theme, units, and other `user_preferences` values
+- **Nutrient column display preferences** — which nutrients appear in the diary and reports
+- **Dashboard widget layout** — the arrangement of widgets on the dashboard
+- **Onboarding data and completion status** — setup wizard answers and progress
+
+Delegates with only library permissions (`can_view_food_library`, `can_view_exercise_library`) cannot read or write any of the above.
+
+### Context-Switched Library Isolation
+
+Your custom food library, recipes, custom exercise database, and medication inventory are only visible to a delegate when they have their active profile context switched to your profile. This prevents your personal libraries from being mixed in with the delegate's own lists when they are working in their own profile.
+
+## Access End Date
+
+When creating or editing a connection, you can set an **Access End Date** to make the sharing arrangement automatically expire. Once the specified date and time passes, the PostgreSQL database automatically revokes all read and write access derived from that connection. No manual action is needed on your part — the moment the timestamp passes, the delegate loses access.
+
+<Tip>
+  Access end dates are useful for time-limited arrangements such as a short-term coaching engagement, a holiday period where a family member is helping log meals, or a trial period for a new trainer.
+</Tip>

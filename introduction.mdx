@@ -54,7 +54,7 @@ SparkyFitness is built on a modern, full-stack architecture designed to be self-
 | Technology | Role |
 |---|---|
 | Node.js + Express | REST API server handling all application logic |
-| PostgreSQL 15+ | Primary data store |
+| PostgreSQL | Primary data store |
 | Row-Level Security (RLS) | Database-enforced data isolation per user |
 | JWT Authentication | Secure, token-based session management |
 | Better Auth | Authentication framework supporting OIDC, TOTP, Passkeys, and MFA |
@@ -103,12 +103,15 @@ SparkyFitness connects to a wide range of health platforms and food databases. I
 - **FatSecret** — Food database with recipes and meal planning data
 - **Nutritionix** — Commercial database including restaurant chain nutrition data
 - **Swiss Food Database** — Swiss national food composition database
+- **Norish** — Nutrition data integration
+- **Yazio** — Food and nutrition database *(uses unofficial API)*
 
 ### Recipe & Meal Planning
 
 - **Mealie** — Self-hosted recipe manager integration
 - **Tandoor** — Self-hosted recipe management with nutrition data
 - **Wger** — Open exercise database and workout planning
+- **Free Exercise DB** — Open exercise database (GitHub)
 
 <Note>
   AI features (SparkyAI) and Family & Friends access are currently in **beta**. They may have incomplete functionality or known bugs. Always review release notes before upgrading, and avoid auto-updating containers.
@@ -133,7 +136,7 @@ SparkyFitness uses [Better Auth](https://www.better-auth.com/) and supports a ra
   <Card title="Installation" icon="server" href="/installation/docker-compose">
     Full installation guide covering Docker Compose, environment variables, and reverse proxy setup.
   </Card>
-  <Card title="Features" icon="star" href="/features">
+  <Card title="Features" icon="star" href="/features/nutrition-diary">
     Detailed documentation for every SparkyFitness feature, from nutrition tracking to AI logging.
   </Card>
   <Card title="Developer Guide" icon="code" href="/developer/getting-started">

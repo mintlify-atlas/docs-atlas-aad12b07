@@ -1,7 +1,7 @@
 ---
 title: "SparkyFitness System Architecture and Tech Stack"
 sidebarTitle: "Architecture"
-description: "Overview of SparkyFitness's full-stack architecture: React 18 frontend, Node.js/Express backend, PostgreSQL with Row-Level Security, and Docker-based deployment."
+description: "Explore SparkyFitness's full-stack architecture: React 19 frontend, Express 5 backend, PostgreSQL with Row-Level Security, and Docker-based deployment."
 ---
 
 SparkyFitness follows a client-server model with a clear separation of concerns between the frontend, backend, and database. The React frontend communicates with a Node.js/Express API over HTTP, which in turn reads and writes to PostgreSQL — enforcing per-user data isolation through Row-Level Security policies — and fans out to AI providers and external data sources such as food databases and device integrations.
@@ -44,11 +44,11 @@ SparkyFitness follows a client-server model with a clear separation of concerns 
 
 <CardGroup cols={2}>
   <Card title="Frontend" icon="browser">
-    - **React 18** with TypeScript
+    - **React 19** with TypeScript
     - **Vite** for fast dev builds and HMR
     - **Tailwind CSS** + **shadcn/ui** component library
     - **TanStack Query** for server-state management
-    - **React Router v6** for client-side routing
+    - **React Router v7** for client-side routing
     - **Fetch API** as the HTTP client
   </Card>
   <Card title="Backend" icon="server">
@@ -79,7 +79,7 @@ The repository is a **pnpm monorepo** (`pnpm-workspace.yaml`) containing the fol
 
 ```
 SparkyFitness/
-├── SparkyFitnessFrontend/    # React 18 + Vite web application
+├── SparkyFitnessFrontend/    # React 19 + Vite web application
 ├── SparkyFitnessServer/      # Express 5 + PostgreSQL backend API
 ├── SparkyFitnessMobile/      # Expo SDK / React Native mobile app
 ├── SparkyFitnessGarmin/      # Standalone Python Garmin integration service

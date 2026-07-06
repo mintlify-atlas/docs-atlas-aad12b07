@@ -229,7 +229,7 @@ SparkyFitness uses **PostgreSQL 15+** as its primary data store. Row-Level Secur
 
 ## Row-Level Security (RLS)
 
-RLS is enabled on every user-specific table so that the database engine itself enforces data isolation — application-layer bugs cannot leak data across accounts. Two PostgreSQL session functions are initialised at the start of every pool-client transaction via `public.set_app_context(userId, authenticatedUserId)`:
+RLS is enabled on every user-specific table so that the database engine itself enforces data isolation — application-layer bugs cannot leak data across accounts. Two PostgreSQL session functions are initialised at the start of every pool-client transaction via `public.set_app_context(userId, authenticatedUserId)` before any query is executed:
 
 ```sql
 -- Returns the active profile being viewed (changes during family delegation)

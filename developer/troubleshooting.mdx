@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting SparkyFitness Deployment Issues"
 sidebarTitle: "Troubleshooting"
-description: "Diagnose and fix common SparkyFitness deployment issues including invalid key errors, database connection failures, CORS problems, and auth misconfigurations."
+description: "Diagnose and fix common SparkyFitness issues: invalid encryption keys, database connection failures, CORS errors, auth misconfigurations, and AI setup."
 ---
 
 Most SparkyFitness deployment problems fall into a handful of predictable categories: misconfigured environment variables, database connectivity, authentication setup, and mobile/HTTPS requirements. This guide walks through each category with specific symptoms, root causes, and step-by-step fixes. Start with the server logs — they contain the error message that points you to the right section below.
@@ -202,7 +202,7 @@ or
 X-Api-Key: <your_api_key>
 ```
 
-**403 fix:** The API key exists but lacks the required scope. Navigate to **Settings → Security → API Keys**, find the key, and confirm it has the `health_data_write` permission enabled. If not, edit the key to add the permission.
+**403 fix:** The API key may be disabled or inactive. Navigate to **Profile → Personal API Key** (or **Settings → API Key Management**) and verify the key is active. If needed, generate a new key.
 
 </Accordion>
 

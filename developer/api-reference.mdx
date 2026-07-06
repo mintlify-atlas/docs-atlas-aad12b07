@@ -1,5 +1,5 @@
 ---
-title: "SparkyFitness REST API Reference"
+title: "SparkyFitness REST API Reference and Endpoint Guide"
 sidebarTitle: "API Reference"
 description: "REST API reference for SparkyFitness covering authentication, health data ingestion, food entries, exercise logging, measurements, and reporting endpoints."
 ---
@@ -34,8 +34,8 @@ The API key must have the `health_data_write` permission scope. Keys without thi
 **Generating an API Key**
 
 1. Open the SparkyFitness web interface.
-2. Navigate to **Settings → Security → API Keys**.
-3. Click **Create New Key**, assign a name and the `health_data_write` permission, then copy the generated key.
+2. Navigate to **Profile → Personal API Key** (or **Settings → API Key Management**).
+3. Click **Generate API Key**, assign a description, then copy the generated key.
 
 **Example — submit weight via API key:**
 
@@ -210,13 +210,13 @@ Returned only for completely malformed request bodies (invalid JSON, or non-obje
 #### Response — `401 Unauthorized`
 
 ```json
-{ "error": "Unauthorized: Missing API Key" }
+{ "error": "Authentication required." }
 ```
 
 #### Response — `403 Forbidden`
 
 ```json
-{ "error": "Forbidden: API Key does not have health_data_write permission" }
+{ "error": "API key is disabled." }
 ```
 
 ---
@@ -229,17 +229,17 @@ All core endpoints require **JWT session authentication** unless noted otherwise
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/food` | Search food database. Query params: `query`, `type` (`exact` or `broad`) |
-| `POST` | `/api/food` | Create a custom food item with full nutritional data |
-| `GET` | `/api/v2/food/search/:providerType` | Search an external food provider (e.g. `openfoodfacts`, `usda`, `fatsecret`) |
-| `GET` | `/api/v2/food/barcode/:barcode` | Look up a food item by barcode (8–14 digit EAN/UPC) |
-| `GET` | `/api/v2/food/details/:providerType/:externalId` | Fetch full nutritional detail from a provider |
+| `GET` | `/api/foods/search` | Search food database. Query params: `query`, `type` (`exact` or `broad`) |
+| `POST` | `/api/foods` | Create a custom food item with full nutritional data |
+| `GET` | `/api/v2/foods/search/:providerType` | Search an external food provider (e.g. `openfoodfacts`, `usda`, `fatsecret`) |
+| `GET` | `/api/v2/foods/barcode/:barcode` | Look up a food item by barcode (8–14 digit EAN/UPC) |
+| `GET` | `/api/v2/foods/details/:providerType/:externalId` | Fetch full nutritional detail from a provider |
 
 **Example — search local database:**
 
 ```bash
 curl -H "Authorization: Bearer $JWT" \
-  "http://your-server:3010/api/food?query=banana&type=broad"
+  "http://your-server:3010/api/foods/search?query=banana&type=broad"
 ```
 
 ### Food Entries (Diary)
@@ -355,10 +355,10 @@ All error responses use a consistent JSON structure:
 { "error": "Selected date is required." }
 ```
 
-**Example 403 (API key scope):**
+**Example 403 (disabled API key):**
 
 ```json
-{ "error": "Forbidden: API Key does not have health_data_write permission" }
+{ "error": "API key is disabled." }
 ```
 
 ---

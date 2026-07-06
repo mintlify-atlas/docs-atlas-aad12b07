@@ -10,38 +10,62 @@ SparkyFitness includes a built-in **Model Context Protocol (MCP) server** that l
 
 The **Model Context Protocol** is an open standard for connecting AI language models to external tools and data sources. An MCP server exposes a set of named *tools* with defined schemas; an MCP client (the AI) calls those tools in the course of answering your questions or executing multi-step tasks.
 
-SparkyFitness's MCP server runs inside the application process and is exposed at `/api/mcp`. Each request is authenticated by the token embedded in the MCP URL — no separate login flow is required once the URL is configured.
+SparkyFitness's MCP server runs **in-process** inside the main application server and is exposed at `/mcp`. Every request must carry an `Authorization: Bearer <API_KEY>` header — no separate login flow is required once the API key and endpoint are configured.
 
 <Note>
-The MCP endpoint uses the **Streamable HTTP** transport introduced in the MCP specification. Clients that support only the older SSE transport are not compatible.
+The MCP endpoint uses the **Streamable HTTP** transport introduced in the MCP specification. Clients that support only the older SSE transport are not compatible. Stdio-only clients (such as the classic Claude Desktop) require the `mcp-remote` bridge described below.
 </Note>
 
 ---
 
-## Getting Your MCP Server URL
+## Getting Your MCP Endpoint and API Key
 
-The MCP URL is unique to your account and contains your authentication token. To retrieve it:
+### 1. Generate an API Key
 
-1. Open SparkyFitness and navigate to **Settings → AI Settings → MCP Server**.
-2. Copy the full MCP server URL shown on the page.
-
-The URL follows this format:
-
-```
-https://your-server.com/api/mcp
-```
-
-The authentication token is handled automatically by the server when the request arrives — your Settings page will show the precise URL and any additional headers required for your deployment.
+Navigate to **Profile → Personal API Key** in the SparkyFitness web UI and generate a key. This key is passed as a Bearer token in the `Authorization` header with every MCP request.
 
 <Warning>
-The MCP URL contains authentication credentials. Treat it like a password — do not share it publicly or commit it to version control.
+Your API key grants access to your health data. Treat it like a password — do not share it publicly or commit it to version control.
 </Warning>
+
+### 2. Find Your MCP Endpoint
+
+| Environment | URL |
+|-------------|-----|
+| **Production** (via nginx proxy) | `https://your-domain.com/mcp` |
+| **Local dev** (Vite proxy) | `http://localhost:8080/mcp` |
+| **Server direct** | `http://localhost:3010/mcp` |
+
+The production nginx configuration proxies `/mcp` to the backend server automatically.
+
+---
+
+## Configuring HTTP-Capable Clients (Cursor, etc.)
+
+MCP clients that natively support the Streamable HTTP transport (such as Cursor) connect directly to the `/mcp` endpoint with an `Authorization` header:
+
+```json
+{
+  "mcpServers": {
+    "sparky-fitness": {
+      "url": "https://your-domain.com/mcp",
+      "headers": {
+        "Authorization": "Bearer <API_KEY>"
+      }
+    }
+  }
+}
+```
+
+For Cursor, open **Settings → MCP Servers** and add a new entry using the URL and header above.
 
 ---
 
 ## Configuring Claude Desktop
 
-Add SparkyFitness as an MCP server in Claude Desktop's configuration file (`claude_desktop_config.json`). The file is located at:
+Claude Desktop uses stdio transport and cannot talk directly to an HTTP MCP server. Use the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridge instead. The API key goes in an `env` block, and the header is passed in the no-space `Authorization:${AUTH_HEADER}` form — this is `mcp-remote`'s documented workaround for clients that mangle spaces in header arguments:
+
+The configuration file (`claude_desktop_config.json`) is located at:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
@@ -49,29 +73,28 @@ Add SparkyFitness as an MCP server in Claude Desktop's configuration file (`clau
 ```json
 {
   "mcpServers": {
-    "sparkyfitness": {
-      "url": "https://your-server.com/api/mcp",
-      "transport": "http"
+    "sparky-fitness": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://your-domain.com/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer <API_KEY>"
+      }
     }
   }
 }
 ```
 
-Replace `https://your-server.com/api/mcp` with the URL you copied from the Settings page. Save the file and restart Claude Desktop. The SparkyFitness tools will appear in Claude's tools panel.
+Replace `https://your-domain.com/mcp` with your server's address and `<API_KEY>` with the key you generated. Save the file and restart Claude Desktop. The SparkyFitness tools will appear in Claude's tools panel.
 
----
-
-## Configuring Cursor or Other MCP Clients
-
-Any MCP-compatible client that supports the Streamable HTTP transport can connect to SparkyFitness. The generic configuration is:
-
-| Setting | Value |
-|---------|-------|
-| **Transport** | `http` (Streamable HTTP) |
-| **URL** | Your MCP server URL from Settings |
-| **Authentication** | Bearer token (embedded in the URL or passed as a header — see your Settings page) |
-
-For Cursor, open **Settings → MCP Servers** and add a new entry with the URL from your SparkyFitness Settings page.
+<Note>
+For a local development server over plain HTTP, add `--allow-http` to the `args` array and use `http://localhost:8080/mcp` as the URL — `mcp-remote` refuses non-HTTPS URLs unless this flag is set.
+</Note>
 
 ---
 
@@ -201,17 +224,17 @@ Dev tools run with elevated database access that bypasses Row Level Security. Ke
 
 ## Security
 
-The MCP server authenticates every request using the token embedded in the MCP URL. Key security properties:
+The MCP server authenticates every request using the `Authorization: Bearer <API_KEY>` header. Key security properties:
 
-- **User-scoped:** Each MCP URL is tied to a specific SparkyFitness user account. The AI operates as that user and can only access data that user has permission to read or write.
+- **User-scoped:** Each API key is tied to a specific SparkyFitness user account. The AI operates as that user and can only access data that user has permission to read or write.
 - **No cross-user access by default:** The MCP server uses the authenticated user's identity (`authenticatedUserId`) — not any delegation cookie — so family-member delegation does not apply to MCP sessions.
-- **Admin tools gated separately:** Dev tools require both an env-var flag and an admin API key; a regular user's MCP URL cannot unlock them.
+- **Admin tools gated separately:** Dev tools require both the `DEV_TOOLS_ENABLED=true` env-var flag and an admin API key; a regular user's API key cannot unlock them.
 
 ---
 
 ## HTTPS Requirement
 
-Most AI clients (including Claude Desktop) require the MCP server URL to use **HTTPS**. An HTTP-only deployment will be rejected by the client's transport layer.
+Most AI clients (including Claude Desktop via `mcp-remote`) require the MCP server URL to use **HTTPS**. An HTTP-only deployment will be rejected by the transport layer.
 
 <Steps>
   <Step title="Set up a reverse proxy">
@@ -224,7 +247,7 @@ Most AI clients (including Claude Desktop) require the MCP server URL to use **H
     iOS, Android, and most desktop AI clients do **not** trust self-signed certificates by default. For external integrations you will need a CA-signed certificate or to install your CA cert as a trusted root on the client device.
   </Step>
   <Step title="Update your MCP URL">
-    After enabling HTTPS, return to **Settings → AI Settings → MCP Server** to copy the updated `https://` URL.
+    After enabling HTTPS, update the URL in your MCP client configuration to use `https://your-domain.com/mcp`.
   </Step>
 </Steps>
 

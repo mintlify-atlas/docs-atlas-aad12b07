@@ -1,7 +1,7 @@
 ---
 title: "Connect SparkyFitness to an External PostgreSQL Database"
 sidebarTitle: "External Database"
-description: "Configure SparkyFitness to use an existing external PostgreSQL 15+ server instead of the bundled Docker database container."
+description: "Configure SparkyFitness to connect to an existing external PostgreSQL 15+ server instead of the bundled Docker database container for production use."
 ---
 
 By default, SparkyFitness ships with a PostgreSQL container in `docker-compose.prod.yml`. If you already manage a PostgreSQL server — whether on bare metal, in a VM, or through a managed service such as AWS RDS, Azure Database for PostgreSQL, or CloudNativePG — you can point SparkyFitness at it instead of running the bundled container. This guide explains how to prepare the external database, set the required environment variables, and disable the bundled container.

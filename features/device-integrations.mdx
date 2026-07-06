@@ -1,7 +1,7 @@
 ---
-title: "Health Device and Service Integrations"
+title: "Health Device and Service Integrations for SparkyFitness"
 sidebarTitle: "Device Integrations"
-description: "Connect SparkyFitness to Garmin, Fitbit, Apple Health, Google Health, Withings, Polar, Strava, and Hevy to automatically sync workouts, steps, sleep, and body metrics."
+description: "Connect SparkyFitness to Garmin, Fitbit, Apple Health, Google Health, Withings, Polar, Strava, and Hevy for automatic health data sync."
 ---
 
 SparkyFitness connects to 8+ health platforms and devices to automatically pull your activity, workouts, sleep, and body metrics into your diary. OAuth-based services use standard authorization flows managed from **Settings → External Data Sources**, while mobile platforms sync through the native iOS and Android apps. You can also push data from any automation tool using the open `/api/health-data` REST endpoint.
@@ -199,7 +199,7 @@ X-Api-Key: <your-api-key>
 
 ### Endpoint
 
-```
+```text
 POST /api/health-data
 ```
 
@@ -251,7 +251,7 @@ Accepts a single JSON object or an array of objects. Each object represents one 
 
 ### Example: iOS Shortcut
 
-```json
+```http
 POST https://your-sparky-instance.com/api/health-data
 Authorization: Bearer spk_xxxxxxxxxxxxxxxxxxxx
 Content-Type: application/json

@@ -1,5 +1,5 @@
 ---
-title: "SparkyFitness Environment Variable Reference"
+title: "SparkyFitness Complete Environment Variable Reference"
 sidebarTitle: "Environment Variables"
 description: "Complete reference for all SparkyFitness environment variables: required secrets, database config, email, CORS, rate limiting, and AI provider settings."
 ---
@@ -198,6 +198,18 @@ These variables are passed to the `sparkyfitness-frontend` service and configure
   Port on which the internal Nginx server listens. Defaults to `80` when running as root, `8080` when running as non-root. In the production Compose file the container's port `80` is mapped to host port `3004`.
 </ParamField>
 
+<ParamField path="NGINX_ACCESS_LOG" type="string">
+  Path for the Nginx access log inside the frontend container. Defaults to `/var/log/nginx/access.log` when running as root, `/dev/stdout` when running as non-root.
+</ParamField>
+
+<ParamField path="NGINX_ERROR_LOG" type="string">
+  Path for the Nginx error log inside the frontend container. Defaults to `/var/log/nginx/error.log` when running as root, `/dev/stderr` when running as non-root.
+</ParamField>
+
+<ParamField path="NGINX_DUMP_CONFIG" type="boolean">
+  Set to `true` to always dump the complete rendered Nginx configuration to stdout on startup. The configuration is also dumped automatically whenever it is invalid (regardless of this setting). Defaults to `false`.
+</ParamField>
+
 <ParamField path="SPARKY_FITNESS_SERVER_HOST" type="string">
   Internal hostname of the backend server, used by the Nginx proxy inside the frontend container to forward API requests. In Docker Compose this should be `sparkyfitness-server` (the service name). Defaults to `sparkyfitness-server`.
 </ParamField>
@@ -238,6 +250,84 @@ Most deployments do not need these variables. They route the **server's outbound
 
 <ParamField path="GARMIN_SERVICE_IS_CN" type="boolean">
   Set to `true` to connect to Garmin Connect China. Defaults to `false`.
+</ParamField>
+
+---
+
+## OIDC Configuration
+
+These variables configure an environment-based OpenID Connect (OIDC) provider on the `sparkyfitness-server` service. When set, an OIDC provider is created or updated at startup and used alongside the existing authentication flow. All `SPARKY_FITNESS_OIDC_*` variables must be passed through the `environment:` section of `sparkyfitness-server` in your `docker-compose.yml`.
+
+<ParamField path="SPARKY_FITNESS_OIDC_AUTH_ENABLED" type="boolean">
+  Set to `true` to enable OIDC login, overriding the value from the Admin › Authentication Settings panel.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_ISSUER_URL" type="string">
+  Issuer URL of your OIDC provider (e.g. `https://auth.example.com`). The discovery document is fetched from `<issuer>/.well-known/openid-configuration`. Required for the environment provider upsert.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_CLIENT_ID" type="string">
+  Client ID issued by your IdP. Required for the environment provider upsert.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_CLIENT_SECRET" type="string">
+  Client secret issued by your IdP. Required for the environment provider upsert.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_PROVIDER_SLUG" type="string">
+  URL-safe identifier for the provider (e.g. `authentik`). Used in login URLs and as a unique key. Required for the environment provider upsert.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_PROVIDER_NAME" type="string">
+  Human-readable display name shown on the login page (e.g. `Authentik`). Optional — defaults to the provider slug.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_SCOPE" type="string">
+  Space-separated OIDC scopes to request. Optional — defaults to `openid email profile`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_AUTO_REGISTER" type="boolean">
+  Set to `true` to automatically create a new SparkyFitness user account on first OIDC login. Optional — defaults to `true`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_AUTO_REDIRECT" type="boolean">
+  Set to `true` to automatically redirect to the single OIDC provider when email/password login is disabled. Optional — defaults to `false`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_LOGO_URL" type="string">
+  URL to a custom logo image displayed on the login button for this provider. Optional.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_DOMAIN" type="string">
+  Organization domain used to restrict access to users from a specific domain. Optional.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_ADMIN_GROUP" type="string">
+  Group or claim value from your IdP that maps to the SparkyFitness admin role. Configure your IdP to include this value in token claims. Optional.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_TOKEN_AUTH_METHOD" type="string">
+  Authentication method for the token endpoint. Optional — defaults to `client_secret_post`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_ID_TOKEN_SIGNED_ALG" type="string">
+  Algorithm used to sign the ID token. Optional — defaults to `RS256`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_USERINFO_SIGNED_ALG" type="string">
+  Algorithm used to sign the UserInfo response. Optional — defaults to `none`.
+</ParamField>
+
+<ParamField path="SPARKY_FITNESS_OIDC_TIMEOUT" type="string">
+  Request timeout in milliseconds for OIDC provider communication. Optional — defaults to `30000` (30 seconds).
+</ParamField>
+
+---
+
+## Developer Tools
+
+<ParamField path="DEV_TOOLS_ENABLED" type="boolean">
+  Set to `true` to enable the in-process MCP developer and debugging tools at `/mcp`: `sparky_inspect_schema`, `sparky_get_user_info`, `sparky_get_db_stats`, and `sparky_run_project_tests`. **Requires an admin API key.** These tools run with elevated database access that bypasses Row Level Security. Off by default. **Do not enable in production** unless you are actively debugging.
 </ParamField>
 
 ---
